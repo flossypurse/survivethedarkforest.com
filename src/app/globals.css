@@ -44,3 +44,48 @@ button:active:not(:disabled) {
   background: #334155;
   border-radius: 2px;
 }
+
+/* Toast animations */
+.toast-enter {
+  animation: toastSlideIn 0.3s ease-out forwards;
+}
+
+.toast-exit {
+  animation: toastSlideOut 0.3s ease-in forwards;
+}
+
+@keyframes toastSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes toastSlideOut {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+/* Urgent button pulse */
+.action-btn-urgent {
+  animation: urgentPulse 2s ease-in-out infinite;
+}
+
+@keyframes urgentPulse {
+  0%, 100% {
+    filter: brightness(1);
+  }
+  50% {
+    filter: brightness(1.3);
+  }
+}
