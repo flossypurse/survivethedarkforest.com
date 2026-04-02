@@ -27,7 +27,7 @@ interface Strategy {
 }
 
 function canForage(s: GameState): boolean {
-  return s.phase === "day" && s.tick >= s.forageCooldownUntil;
+  return s.tick >= s.forageCooldownUntil;
 }
 
 const strategies: Record<string, Strategy> = {
@@ -47,22 +47,9 @@ const strategies: Record<string, Strategy> = {
     },
   },
 
-  hoarder: {
-    name: "hoarder",
-    description: "Forage aggressively, eat only when starving, minimal fire maintenance",
-    decide(s, cfg) {
-      if (s.fire < 15 && s.wood > 0) return "stoke";
-      if (s.hunger > 90 && s.food > 0) return "eat";
-      if (!s.hasShelter && s.materials >= cfg.SHELTER_MATERIAL_COST) return "build_shelter";
-      if (s.materials >= cfg.TRAP_MATERIAL_COST && s.traps < 3) return "build_trap";
-      if (canForage(s)) return "forage";
-      return "wait";
-    },
-  },
-
   cautious: {
     name: "cautious",
-    description: "Minimize actions (noise), keep fire high, eat early, forage only when needed",
+    description: "Minimize noise, keep fire high, eat early, forage only when needed",
     decide(s, cfg) {
       if (s.fire < 60 && s.wood > 0) return "stoke";
       if (s.hunger > 40 && s.food > 0) return "eat";
@@ -113,23 +100,15 @@ const strategies: Record<string, Strategy> = {
     },
   },
 
-  // ── Noise-aware strategies (new for creature system) ──
-
   quiet: {
     name: "quiet",
-    description: "Minimize noise — batch actions, wait for noise to decay between actions",
+    description: "Minimize noise — only act when noise is low and resources critical",
     decide(s, cfg) {
-      // Only act when noise is low
       if (s.noise > 15) return "wait";
-      // Urgent: fire critical
       if (s.fire < 20 && s.wood > 0) return "stoke";
-      // Urgent: starving
       if (s.hunger > 85 && s.food > 0) return "eat";
-      // Only forage when resources critically low
       if (canForage(s) && (s.wood < 2 || s.food < 1)) return "forage";
-      // Maintain fire when quiet
       if (s.fire < 40 && s.wood > 0) return "stoke";
-      // Eat when safe
       if (s.hunger > 60 && s.food > 0) return "eat";
       return "wait";
     },
@@ -137,37 +116,14 @@ const strategies: Record<string, Strategy> = {
 
   dimfire: {
     name: "dimfire",
-    description: "Keep fire low to avoid attracting predators — accept timid creature risk",
+    description: "Keep fire low to avoid attracting predators",
     decide(s, cfg) {
-      // Only stoke when fire is about to die
       if (s.fire < 12 && s.wood > 0) return "stoke";
       if (s.hunger > 70 && s.food > 0) return "eat";
       if (canForage(s)) return "forage";
       if (!s.hasShelter && s.materials >= cfg.SHELTER_MATERIAL_COST) return "build_shelter";
       if (s.materials >= cfg.TRAP_MATERIAL_COST && s.traps < 2) return "build_trap";
       if (s.hunger > 50 && s.food > 0) return "eat";
-      return "wait";
-    },
-  },
-
-  noiseburst: {
-    name: "noiseburst",
-    description: "Batch all actions together, then go silent — concentrated noise windows",
-    decide(s, cfg) {
-      // If we just acted (noise high), keep going — damage is done
-      if (s.noise > 20) {
-        if (canForage(s)) return "forage";
-        if (s.fire < 70 && s.wood > 0) return "stoke";
-        if (s.hunger > 40 && s.food > 0) return "eat";
-        if (!s.hasShelter && s.materials >= cfg.SHELTER_MATERIAL_COST) return "build_shelter";
-        if (s.materials >= cfg.TRAP_MATERIAL_COST && s.traps < 2) return "build_trap";
-        return "wait";
-      }
-      // Noise is low — only act if something is urgent
-      if (s.fire < 25 && s.wood > 0) return "stoke";
-      if (s.hunger > 80 && s.food > 0) return "eat";
-      // Start a burst if resources are low
-      if (canForage(s) && (s.wood < 4 || s.food < 2)) return "forage";
       return "wait";
     },
   },
@@ -179,73 +135,56 @@ const configPresets: Record<string, Partial<GameConfig>> = {
   default: {},
 
   easy: {
-    FIRE_BURN_RATE: 0.3,
-    FIRE_NIGHT_BURN_RATE: 0.5,
+    FIRE_BURN_RATE: 0.4,
     WOOD_PER_FUEL: 14,
     HUNGER_RATE: 0.15,
     FOOD_PER_EAT: 20,
     WOOD_FORAGE_AMOUNT: 3,
     FOOD_FORAGE_AMOUNT: 2,
     FORAGE_COOLDOWN_TICKS: 8,
-    CREATURE_SPAWN_RATE: 0.02,
-    CREATURE_SPAWN_ESCALATION: 0.003,
+    CREATURE_SPAWN_RATE: 0.015,
+    CREATURE_SPAWN_ESCALATION: 0.0002,
     NOISE_DECAY: 3,
   },
 
   hard: {
-    FIRE_BURN_RATE: 0.5,
-    FIRE_NIGHT_BURN_RATE: 0.8,
+    FIRE_BURN_RATE: 0.65,
     WOOD_PER_FUEL: 8,
     HUNGER_RATE: 0.25,
     FOOD_PER_EAT: 12,
     HUNGER_DAMAGE: 1.0,
     FORAGE_COOLDOWN_TICKS: 12,
-    CREATURE_SPAWN_RATE: 0.04,
-    CREATURE_SPAWN_ESCALATION: 0.01,
+    CREATURE_SPAWN_RATE: 0.035,
+    CREATURE_SPAWN_ESCALATION: 0.0006,
     NOISE_DECAY: 1.5,
     NOISE_FORAGE: 45,
   },
 
   nightmare: {
-    FIRE_BURN_RATE: 0.55,
-    FIRE_NIGHT_BURN_RATE: 0.85,
+    FIRE_BURN_RATE: 0.75,
     WOOD_PER_FUEL: 7,
     HUNGER_RATE: 0.28,
     FOOD_PER_EAT: 10,
     HUNGER_DAMAGE: 1.2,
     FORAGE_COOLDOWN_TICKS: 14,
-    CREATURE_SPAWN_RATE: 0.06,
-    CREATURE_SPAWN_ESCALATION: 0.015,
+    CREATURE_SPAWN_RATE: 0.05,
+    CREATURE_SPAWN_ESCALATION: 0.001,
     CREATURE_MAX: 12,
     NOISE_DECAY: 1,
     NOISE_FORAGE: 50,
     NOISE_BUILD: 60,
   },
 
-  long_days: {
-    DAY_DURATION_TICKS: 300,
-    NIGHT_DURATION_TICKS: 90,
+  short_game: {
+    HOURS_TO_SURVIVE: 24,
+    TICKS_PER_HOUR: 20,
+    CREATURE_SPAWN_ESCALATION: 0.0006,
   },
 
-  long_nights: {
-    DAY_DURATION_TICKS: 120,
-    NIGHT_DURATION_TICKS: 180,
-  },
-
-  quiet_forest: {
-    CREATURE_SPAWN_RATE: 0.015,
-    CREATURE_SPAWN_ESCALATION: 0.003,
-    NOISE_DECAY: 4,
-    NOISE_FORAGE: 25,
-    NOISE_STOKE: 10,
-  },
-
-  loud_forest: {
-    CREATURE_SPAWN_RATE: 0.04,
-    CREATURE_SPAWN_ESCALATION: 0.008,
-    NOISE_DECAY: 1,
-    NOISE_FORAGE: 50,
-    NOISE_BUILD: 60,
+  long_game: {
+    HOURS_TO_SURVIVE: 72,
+    TICKS_PER_HOUR: 20,
+    CREATURE_SPAWN_ESCALATION: 0.0002,
   },
 };
 
@@ -253,7 +192,7 @@ const configPresets: Record<string, Partial<GameConfig>> = {
 
 interface RunResult {
   status: "won" | "dead";
-  daysSurvived: number;
+  hoursSurvived: number;
   ticksSurvived: number;
   causeOfDeath: string | null;
   finalHealth: number;
@@ -271,7 +210,9 @@ interface RunResult {
 function runGame(strategy: Strategy, cfg: GameConfig, seed: number): RunResult {
   let state = createInitialState();
   state.lastSavedAt = 0;
-  state.tick = seed * 10000;
+  // Use seed to vary RNG without large tick offsets
+  // Offset by small amount so each run has unique random sequence
+  state.tick = seed * 7;
 
   const actions: Record<Action, number> = {
     forage: 0, eat: 0, stoke: 0, build_trap: 0, build_shelter: 0, wait: 0,
@@ -282,8 +223,7 @@ function runGame(strategy: Strategy, cfg: GameConfig, seed: number): RunResult {
   let totalNoise = 0;
   let creaturesEncountered = 0;
 
-  const maxTicks = cfg.DAY_DURATION_TICKS + cfg.NIGHT_DURATION_TICKS;
-  const maxTotal = maxTicks * (cfg.DAYS_TO_SURVIVE + 2);
+  const maxTotal = cfg.TICKS_PER_HOUR * (cfg.HOURS_TO_SURVIVE + 5);
 
   let tickCount = 0;
   while (state.status === "playing" && tickCount < maxTotal) {
@@ -299,21 +239,16 @@ function runGame(strategy: Strategy, cfg: GameConfig, seed: number): RunResult {
       case "wait": break;
     }
 
-    // Track creature IDs before tick to count real attacks (not despawns)
     const creatureIdsBefore = new Set(state.creatures.map(c => c.id));
     state = tick(state, cfg);
     tickCount++;
 
-    // Track stats
     if (state.wood > peakWood) peakWood = state.wood;
     if (state.food > peakFood) peakFood = state.food;
     if (state.noise > peakNoise) peakNoise = state.noise;
     totalNoise += state.noise;
-    // Count creatures that were within attack range (check log for damage messages)
     for (const id of creatureIdsBefore) {
       if (!state.creatures.some(c => c.id === id)) {
-        // Creature was removed — check if it was close enough to have attacked
-        // (despawned creatures were at > DESPAWN_DISTANCE, attacks at < ATTACK_RANGE)
         creaturesEncountered++;
       }
     }
@@ -333,7 +268,7 @@ function runGame(strategy: Strategy, cfg: GameConfig, seed: number): RunResult {
 
   return {
     status: state.status as "won" | "dead",
-    daysSurvived: state.day,
+    hoursSurvived: state.hour,
     ticksSurvived: tickCount,
     causeOfDeath,
     finalHealth: state.health,
@@ -349,156 +284,74 @@ function runGame(strategy: Strategy, cfg: GameConfig, seed: number): RunResult {
   };
 }
 
-// ── Stats Aggregation ──
+// ── Stats ──
 
 interface AggregateStats {
-  runs: number;
-  wins: number;
-  winRate: number;
-  avgDaysSurvived: number;
-  medianDaysSurvived: number;
-  avgTicksSurvived: number;
+  runs: number; wins: number; winRate: number;
+  avgHours: number; medianHours: number;
   deaths: { fire: number; starvation: number; creature: number };
   deathRates: { fire: string; starvation: string; creature: string };
-  avgActions: Record<Action, number>;
-  avgPeakWood: number;
-  avgPeakFood: number;
-  shelterRate: number;
-  avgTraps: number;
-  avgNoise: number;
-  avgCreatures: number;
+  avgNoise: number; avgCreatures: number;
+  shelterRate: number; avgTraps: number;
 }
 
 function aggregate(results: RunResult[]): AggregateStats {
   const n = results.length;
   const wins = results.filter((r) => r.status === "won").length;
   const deaths = { fire: 0, starvation: 0, creature: 0 };
-  const totalActions: Record<Action, number> = {
-    forage: 0, eat: 0, stoke: 0, build_trap: 0, build_shelter: 0, wait: 0,
-  };
-
-  let totalDays = 0;
-  let totalTicks = 0;
-  let totalPeakWood = 0;
-  let totalPeakFood = 0;
-  let shelters = 0;
-  let totalTraps = 0;
-  let totalAvgNoise = 0;
-  let totalCreatures = 0;
-  const daysList: number[] = [];
+  let totalHours = 0, totalNoise = 0, totalCreatures = 0, shelters = 0, totalTraps = 0;
+  const hoursList: number[] = [];
 
   for (const r of results) {
-    totalDays += r.daysSurvived;
-    totalTicks += r.ticksSurvived;
-    totalPeakWood += r.peakWood;
-    totalPeakFood += r.peakFood;
+    totalHours += r.hoursSurvived;
+    totalNoise += r.avgNoise;
+    totalCreatures += r.creaturesEncountered;
     if (r.shelterBuilt) shelters++;
     totalTraps += r.trapsBuilt;
-    totalAvgNoise += r.avgNoise;
-    totalCreatures += r.creaturesEncountered;
-    daysList.push(r.daysSurvived);
-
+    hoursList.push(r.hoursSurvived);
     if (r.causeOfDeath === "fire") deaths.fire++;
     else if (r.causeOfDeath === "starvation") deaths.starvation++;
     else if (r.causeOfDeath === "creature") deaths.creature++;
-
-    for (const [k, v] of Object.entries(r.actionsPerformed)) {
-      totalActions[k as Action] += v;
-    }
   }
 
-  daysList.sort((a, b) => a - b);
-  const median = daysList[Math.floor(n / 2)];
+  hoursList.sort((a, b) => a - b);
   const totalDeaths = deaths.fire + deaths.starvation + deaths.creature;
+  const pct = (v: number) => totalDeaths > 0 ? ((v / totalDeaths) * 100).toFixed(1) + "%" : "0%";
 
   return {
-    runs: n,
-    wins,
-    winRate: wins / n,
-    avgDaysSurvived: totalDays / n,
-    medianDaysSurvived: median,
-    avgTicksSurvived: totalTicks / n,
+    runs: n, wins, winRate: wins / n,
+    avgHours: totalHours / n,
+    medianHours: hoursList[Math.floor(n / 2)],
     deaths,
-    deathRates: {
-      fire: totalDeaths > 0 ? ((deaths.fire / totalDeaths) * 100).toFixed(1) + "%" : "0%",
-      starvation: totalDeaths > 0 ? ((deaths.starvation / totalDeaths) * 100).toFixed(1) + "%" : "0%",
-      creature: totalDeaths > 0 ? ((deaths.creature / totalDeaths) * 100).toFixed(1) + "%" : "0%",
-    },
-    avgActions: Object.fromEntries(
-      Object.entries(totalActions).map(([k, v]) => [k, Math.round(v / n)])
-    ) as Record<Action, number>,
-    avgPeakWood: totalPeakWood / n,
-    avgPeakFood: totalPeakFood / n,
+    deathRates: { fire: pct(deaths.fire), starvation: pct(deaths.starvation), creature: pct(deaths.creature) },
+    avgNoise: totalNoise / n,
+    avgCreatures: totalCreatures / n,
     shelterRate: shelters / n,
     avgTraps: totalTraps / n,
-    avgNoise: totalAvgNoise / n,
-    avgCreatures: totalCreatures / n,
   };
 }
 
-// ── Output Formatting ──
-
-function printResults(
-  configName: string,
-  strategyName: string,
-  stats: AggregateStats
-) {
-  const bar = (pct: number, width: number = 20) => {
-    const filled = Math.round(pct * width);
-    return "█".repeat(filled) + "░".repeat(width - filled);
-  };
-
-  console.log("");
-  console.log(`┌──────────────────────────────────────────────────────────────┐`);
-  console.log(`│  Config: ${configName.padEnd(16)} Strategy: ${strategyName.padEnd(16)}     │`);
-  console.log(`│  Runs: ${String(stats.runs).padEnd(51)}│`);
-  console.log(`├──────────────────────────────────────────────────────────────┤`);
-  console.log(`│  Win Rate:  ${bar(stats.winRate)} ${(stats.winRate * 100).toFixed(1).padStart(5)}%      │`);
-  console.log(`│  Avg Days:  ${stats.avgDaysSurvived.toFixed(1).padStart(5)}  Median: ${String(stats.medianDaysSurvived).padStart(3)}                  │`);
-  console.log(`├──────────────────────────────────────────────────────────────┤`);
-  console.log(`│  Deaths:                                                    │`);
-  console.log(`│    Fire:       ${stats.deathRates.fire.padStart(6)}  (${String(stats.deaths.fire).padStart(4)} runs)                    │`);
-  console.log(`│    Starvation: ${stats.deathRates.starvation.padStart(6)}  (${String(stats.deaths.starvation).padStart(4)} runs)                    │`);
-  console.log(`│    Creature:   ${stats.deathRates.creature.padStart(6)}  (${String(stats.deaths.creature).padStart(4)} runs)                    │`);
-  console.log(`├──────────────────────────────────────────────────────────────┤`);
-  console.log(`│  Actions:                                                   │`);
-  console.log(`│    Forage: ${String(stats.avgActions.forage).padStart(5)}   Eat: ${String(stats.avgActions.eat).padStart(5)}   Stoke: ${String(stats.avgActions.stoke).padStart(5)}        │`);
-  console.log(`│    Trap: ${String(stats.avgActions.build_trap).padStart(5)}   Shelter: ${String(stats.avgActions.build_shelter).padStart(5)}   Wait: ${String(stats.avgActions.wait).padStart(5)}      │`);
-  console.log(`├──────────────────────────────────────────────────────────────┤`);
-  console.log(`│  Resources:                                                 │`);
-  console.log(`│    Peak Wood: ${stats.avgPeakWood.toFixed(1).padStart(5)}   Peak Food: ${stats.avgPeakFood.toFixed(1).padStart(5)}                 │`);
-  console.log(`│    Shelter: ${(stats.shelterRate * 100).toFixed(0).padStart(3)}%      Traps: ${stats.avgTraps.toFixed(1).padStart(4)}                     │`);
-  console.log(`├──────────────────────────────────────────────────────────────┤`);
-  console.log(`│  Noise & Creatures:                                         │`);
-  console.log(`│    Avg Noise: ${stats.avgNoise.toFixed(1).padStart(5)}   Creatures Fought: ${stats.avgCreatures.toFixed(1).padStart(4)}          │`);
-  console.log(`└──────────────────────────────────────────────────────────────┘`);
-}
+// ── Output ──
 
 function printComparisonTable(
   results: Array<{ config: string; strategy: string; stats: AggregateStats }>
 ) {
-  console.log("");
-  console.log("═════════════════════════════════════════════════════════════════════════════════════");
+  console.log("\n" + "=".repeat(90));
   console.log("  COMPARISON TABLE");
-  console.log("═════════════════════════════════════════════════════════════════════════════════════");
+  console.log("=".repeat(90));
   console.log(
-    "  Config".padEnd(18) +
-    "Strategy".padEnd(14) +
-    "Win%".padStart(7) +
-    "AvgDay".padStart(8) +
-    "Fire%".padStart(8) +
-    "Starve%".padStart(9) +
-    "Creature%".padStart(11) +
-    "AvgNoise".padStart(10) +
-    "Fights".padStart(8)
+    "  Config".padEnd(16) + "Strategy".padEnd(14) +
+    "Win%".padStart(7) + "AvgHr".padStart(7) +
+    "Fire%".padStart(8) + "Starve%".padStart(9) + "Creature%".padStart(11) +
+    "AvgNoise".padStart(10) + "Fights".padStart(8)
   );
-  console.log("  " + "─".repeat(83));
+  console.log("  " + "-".repeat(84));
 
   for (const r of results) {
     console.log(
-      `  ${r.config.padEnd(16)}${r.strategy.padEnd(14)}` +
+      `  ${r.config.padEnd(14)}${r.strategy.padEnd(14)}` +
       `${(r.stats.winRate * 100).toFixed(1).padStart(6)}%` +
-      `${r.stats.avgDaysSurvived.toFixed(1).padStart(7)}` +
+      `${r.stats.avgHours.toFixed(0).padStart(6)}` +
       `${r.stats.deathRates.fire.padStart(8)}` +
       `${r.stats.deathRates.starvation.padStart(9)}` +
       `${r.stats.deathRates.creature.padStart(11)}` +
@@ -506,142 +359,69 @@ function printComparisonTable(
       `${r.stats.avgCreatures.toFixed(1).padStart(8)}`
     );
   }
-  console.log("═════════════════════════════════════════════════════════════════════════════════════");
+  console.log("=".repeat(90));
 }
 
 // ── CLI ──
 
-function parseArgs(): {
-  runs: number;
-  configs: string[];
-  strategies: string[];
-  verbose: boolean;
-  sweep: boolean;
-} {
+function parseArgs() {
   const args = process.argv.slice(2);
-  let runs = 1000;
-  let configs: string[] = ["default"];
-  let selectedStrategies: string[] = ["balanced"];
-  let verbose = false;
-  let sweep = false;
+  let runs = 1000, configs = ["default"], selectedStrategies = ["balanced"];
+  let verbose = false, sweep = false;
 
   for (let i = 0; i < args.length; i++) {
     switch (args[i]) {
-      case "--runs":
-      case "-n":
-        runs = parseInt(args[++i], 10);
-        break;
-      case "--config":
-      case "-c":
-        configs = args[++i].split(",");
-        break;
-      case "--strategy":
-      case "-s":
-        selectedStrategies = args[++i].split(",");
-        break;
-      case "--verbose":
-      case "-v":
-        verbose = true;
-        break;
-      case "--sweep":
-        sweep = true;
-        break;
+      case "--runs": case "-n": runs = parseInt(args[++i], 10); break;
+      case "--config": case "-c": configs = args[++i].split(","); break;
+      case "--strategy": case "-s": selectedStrategies = args[++i].split(","); break;
+      case "--verbose": case "-v": verbose = true; break;
+      case "--sweep": sweep = true; break;
       case "--list":
-        console.log("\nAvailable strategies:");
-        for (const [k, v] of Object.entries(strategies)) {
-          console.log(`  ${k.padEnd(14)} ${v.description}`);
-        }
-        console.log("\nAvailable configs:");
-        for (const k of Object.keys(configPresets)) {
-          console.log(`  ${k}`);
-        }
+        console.log("\nStrategies:");
+        for (const [k, v] of Object.entries(strategies)) console.log(`  ${k.padEnd(14)} ${v.description}`);
+        console.log("\nConfigs:");
+        for (const k of Object.keys(configPresets)) console.log(`  ${k}`);
         process.exit(0);
-      case "--help":
-      case "-h":
-        console.log(`
-Dark Forest Simulation Harness
-
-Usage: npx tsx scripts/simulate.ts [options]
-
-Options:
-  -n, --runs N          Number of runs per combo (default: 1000)
-  -c, --config NAME     Config preset(s), comma-separated (default: default)
-  -s, --strategy NAME   Strategy(ies), comma-separated (default: balanced)
-  --sweep               Run ALL strategies x ALL configs
-  --list                List available strategies and configs
-  -v, --verbose         Show per-run results
-  -h, --help            Show this help
-
-Examples:
-  npx tsx scripts/simulate.ts --sweep -n 500
-  npx tsx scripts/simulate.ts -c hard,nightmare -s balanced,quiet -n 2000
-  npx tsx scripts/simulate.ts -c default -s balanced -n 100 -v
-        `);
+      case "--help": case "-h":
+        console.log(`\nUsage: npx tsx scripts/simulate.ts [options]\n  -n N  -c config  -s strategy  --sweep  --list  -v  -h`);
         process.exit(0);
     }
   }
-
-  if (sweep) {
-    configs = Object.keys(configPresets);
-    selectedStrategies = Object.keys(strategies);
-  }
-
+  if (sweep) { configs = Object.keys(configPresets); selectedStrategies = Object.keys(strategies); }
   return { runs, configs, strategies: selectedStrategies, verbose, sweep };
 }
 
 function main() {
   const opts = parseArgs();
-
-  console.log(`\n🌲 Dark Forest Simulation Harness`);
-  console.log(`   Runs per combo: ${opts.runs}`);
-  console.log(`   Configs: ${opts.configs.join(", ")}`);
-  console.log(`   Strategies: ${opts.strategies.join(", ")}`);
+  console.log(`\nDark Forest Sim — ${opts.runs} runs | ${opts.configs.join(",")} | ${opts.strategies.join(",")}`);
 
   const allResults: Array<{ config: string; strategy: string; stats: AggregateStats }> = [];
-  const startTime = performance.now();
+  const t0 = performance.now();
 
   for (const configName of opts.configs) {
     const preset = configPresets[configName];
-    if (!preset) {
-      console.error(`Unknown config: ${configName}. Use --list to see options.`);
-      continue;
-    }
+    if (!preset) { console.error(`Unknown config: ${configName}`); continue; }
     const cfg: GameConfig = { ...DEFAULT_CONFIG, ...preset };
 
     for (const stratName of opts.strategies) {
       const strategy = strategies[stratName];
-      if (!strategy) {
-        console.error(`Unknown strategy: ${stratName}. Use --list to see options.`);
-        continue;
-      }
+      if (!strategy) { console.error(`Unknown strategy: ${stratName}`); continue; }
 
       const results: RunResult[] = [];
       for (let i = 0; i < opts.runs; i++) {
         const result = runGame(strategy, cfg, i);
         results.push(result);
-
         if (opts.verbose) {
-          console.log(
-            `  Run ${String(i + 1).padStart(4)}: ${result.status.padEnd(4)} day ${result.daysSurvived} ` +
-            `(${result.ticksSurvived} ticks) avgNoise=${result.avgNoise.toFixed(1)} ` +
-            `fights=${result.creaturesEncountered}` +
-            `${result.causeOfDeath ? ` [${result.causeOfDeath}]` : ""}`
-          );
+          console.log(`  #${i + 1}: ${result.status} hr${result.hoursSurvived} fights=${result.creaturesEncountered}${result.causeOfDeath ? ` [${result.causeOfDeath}]` : ""}`);
         }
       }
-
       const stats = aggregate(results);
-      printResults(configName, stratName, stats);
       allResults.push({ config: configName, strategy: stratName, stats });
     }
   }
 
-  if (allResults.length > 1) {
-    printComparisonTable(allResults);
-  }
-
-  const elapsed = ((performance.now() - startTime) / 1000).toFixed(2);
-  console.log(`\nCompleted in ${elapsed}s`);
+  printComparisonTable(allResults);
+  console.log(`\nDone in ${((performance.now() - t0) / 1000).toFixed(2)}s\n`);
 }
 
 main();

@@ -7,12 +7,12 @@ import {
   MAX_HEALTH,
   MAX_HUNGER,
   NOISE_MAX,
+  HOURS_TO_SURVIVE,
   TRAP_MATERIAL_COST,
   SHELTER_MATERIAL_COST,
-  DAYS_TO_SURVIVE,
 } from "@/lib/constants";
 
-// ── Palette — campfire-lit, muted, earthy ──
+// ── Palette ──
 
 const C = {
   fire: "#d4915c",
@@ -28,8 +28,7 @@ const C = {
   materials: "#8a9bae",
   defense: "#9b8579",
   forage: "#7a9e6d",
-  day: "#c9a96e",
-  night: "#7b7fad",
+  rescue: "#7b9cc4",
   muted: "#6b7280",
   dim: "#3f444d",
   text: "#c9c0a8",
@@ -97,7 +96,6 @@ export default function GameHUD({
 }: Props) {
   const isPlaying = state.status === "playing";
   const forageCooldown = Math.max(0, state.forageCooldownUntil - state.tick);
-  const isNight = state.phase === "night";
   const toasts = useToasts(state.log);
 
   const healthPct = state.health / MAX_HEALTH;
@@ -105,42 +103,49 @@ export default function GameHUD({
   const fullPct = (MAX_HUNGER - state.hunger) / MAX_HUNGER;
   const noisePct = state.noise / NOISE_MAX;
 
+  const hoursRemaining = Math.max(0, HOURS_TO_SURVIVE - state.hour);
+
   return (
     <div className="absolute inset-0 flex flex-col pointer-events-none">
 
-      {/* ════════ TOP: compact status strip ════════ */}
+      {/* ════════ TOP ════════ */}
       <div
-        className="pointer-events-auto px-3 py-2 md:px-5 md:py-3"
+        className="pointer-events-auto"
         style={{
-          background: "linear-gradient(to bottom, rgba(5,5,10,0.9) 0%, rgba(5,5,10,0.5) 80%, transparent 100%)",
+          background: "linear-gradient(to bottom, rgba(5,5,10,0.92) 0%, rgba(5,5,10,0.5) 85%, transparent 100%)",
+          padding: "12px 16px 16px",
         }}
       >
-        {/* Phase + Day + Creatures */}
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-2">
+        {/* Rescue countdown + creatures */}
+        <div className="flex items-center justify-between" style={{ marginBottom: "10px" }}>
+          <div className="flex items-center" style={{ gap: "10px" }}>
             <span
-              className="text-xs font-bold px-2 py-0.5 rounded"
+              className="font-mono font-bold tabular-nums"
               style={{
-                color: isNight ? C.night : C.day,
-                border: `1px solid ${(isNight ? C.night : C.day) + "33"}`,
-                background: `${(isNight ? C.night : C.day)}11`,
+                color: hoursRemaining <= 6 ? C.rescue : C.muted,
+                fontSize: "0.8rem",
+                letterSpacing: "0.05em",
+                textShadow: hoursRemaining <= 6 ? `0 0 8px ${C.rescue}44` : "none",
               }}
             >
-              {isNight ? "NIGHT" : "DAY"}
-            </span>
-            <span className="text-xs" style={{ color: C.muted }}>
-              Day {state.day} / {DAYS_TO_SURVIVE}
+              RESCUE IN {hoursRemaining}h
             </span>
           </div>
           {state.creatures.length > 0 && (
-            <span className="text-xs font-medium" style={{ color: C.health }}>
+            <span
+              className="font-medium"
+              style={{ color: C.health, fontSize: "0.75rem" }}
+            >
               {state.creatures.length} nearby
             </span>
           )}
         </div>
 
         {/* Vital bars — 2x2 grid on mobile, row on desktop */}
-        <div className="grid grid-cols-2 gap-x-3 gap-y-1 md:flex md:gap-4">
+        <div
+          className="grid grid-cols-2 md:flex"
+          style={{ gap: "6px 12px" }}
+        >
           <MiniBar label="HP" pct={healthPct} color={C.health} dimColor={C.healthDim} value={Math.round(state.health)} />
           <MiniBar label="FIRE" pct={firePct} color={C.fire} dimColor={C.fireDim} value={Math.round(state.fire)} />
           <MiniBar label="FULL" pct={fullPct} color={C.hunger} dimColor={C.hungerDim} value={Math.round(MAX_HUNGER - state.hunger)} />
@@ -148,19 +153,20 @@ export default function GameHUD({
         </div>
       </div>
 
-      {/* ════════ MIDDLE: canvas breathes + toast log ════════ */}
+      {/* ════════ MIDDLE ════════ */}
       <div className="flex-1" />
 
-      <div className="px-3 pb-1 md:px-5 flex flex-col gap-1 items-start pointer-events-none">
+      <div style={{ padding: "0 16px 6px" }} className="flex flex-col items-start pointer-events-none" >
         {toasts.map((toast) => (
           <div
             key={toast.id}
             className={`toast-enter ${toast.exiting ? "toast-exit" : ""}`}
             style={{
-              padding: "5px 10px",
+              padding: "6px 12px",
+              marginBottom: "4px",
               borderRadius: "6px",
               fontSize: "0.75rem",
-              lineHeight: "1.3",
+              lineHeight: "1.35",
               maxWidth: "min(88vw, 380px)",
               background: "rgba(5,5,10,0.8)",
               border: `1px solid ${
@@ -181,28 +187,37 @@ export default function GameHUD({
         ))}
       </div>
 
-      {/* ════════ BOTTOM: actions ════════ */}
+      {/* ════════ BOTTOM ════════ */}
       <div
         className="pointer-events-auto"
         style={{
-          background: "linear-gradient(to top, rgba(5,5,10,0.92) 0%, rgba(5,5,10,0.6) 80%, transparent 100%)",
+          background: "linear-gradient(to top, rgba(5,5,10,0.94) 0%, rgba(5,5,10,0.6) 85%, transparent 100%)",
+          padding: "10px 16px 20px",
         }}
       >
         {isPlaying ? (
-          <div className="px-3 pt-2 pb-4 md:px-5 md:pt-3 md:pb-5">
-            {/* Inventory line — what you HAVE */}
-            <div className="flex items-center gap-3 mb-2 px-1">
-              <InvItem icon="W" value={state.wood} color={C.wood} />
-              <InvItem icon="F" value={state.food} color={C.food} />
-              <InvItem icon="M" value={state.materials} color={C.materials} />
-              {state.traps > 0 && <InvItem icon="T" value={state.traps} color={C.defense} />}
+          <>
+            {/* Inventory */}
+            <div
+              className="flex items-center"
+              style={{ gap: "12px", marginBottom: "10px", paddingLeft: "4px" }}
+            >
+              <InvItem label="Wood" value={state.wood} color={C.wood} />
+              <InvItem label="Food" value={state.food} color={C.food} />
+              <InvItem label="Mat" value={state.materials} color={C.materials} />
+              {state.traps > 0 && <InvItem label="Traps" value={state.traps} color={C.defense} />}
               {state.hasShelter && (
-                <span className="text-xs" style={{ color: C.defense }}>SHELTER</span>
+                <span style={{ color: C.defense, fontSize: "0.65rem", fontWeight: 600, letterSpacing: "0.04em" }}>
+                  SHELTER
+                </span>
               )}
             </div>
 
-            {/* Action buttons — each shows cost + what it does */}
-            <div className="grid grid-cols-2 gap-2 md:flex md:flex-wrap md:gap-2">
+            {/* Actions */}
+            <div
+              className="grid grid-cols-2 md:flex md:flex-wrap"
+              style={{ gap: "8px" }}
+            >
               <ActionBtn
                 onClick={onAddWood}
                 disabled={state.wood <= 0}
@@ -215,15 +230,13 @@ export default function GameHUD({
 
               <ActionBtn
                 onClick={onForage}
-                disabled={isNight || forageCooldown > 0}
+                disabled={forageCooldown > 0}
                 color={C.forage}
               >
                 <span className="font-semibold">
                   {forageCooldown > 0 ? `Forage (${forageCooldown}s)` : "Forage"}
                 </span>
-                <span className="action-cost">
-                  {isNight ? "night" : "find stuff"}
-                </span>
+                <span className="action-cost">loud — find stuff</span>
               </ActionBtn>
 
               <ActionBtn
@@ -256,9 +269,9 @@ export default function GameHUD({
                 </ActionBtn>
               )}
             </div>
-          </div>
+          </>
         ) : (
-          <div className="flex flex-col items-center gap-3 px-4 py-6">
+          <div className="flex flex-col items-center" style={{ gap: "12px", padding: "12px 0" }}>
             <div
               className="text-lg md:text-xl font-bold"
               style={{
@@ -271,16 +284,16 @@ export default function GameHUD({
                 : "You perished in the dark forest."}
             </div>
             <div className="text-sm" style={{ color: C.muted }}>
-              Survived {state.day - 1} day{state.day - 1 !== 1 ? "s" : ""}
+              Survived {state.hour} hour{state.hour !== 1 ? "s" : ""}
             </div>
             <button
               onClick={onRestart}
-              className="px-6 py-3 rounded-lg text-sm font-medium cursor-pointer"
+              className="rounded-lg text-sm font-medium cursor-pointer"
               style={{
                 background: "rgba(20,20,15,0.8)",
                 color: C.text,
                 border: "1px solid rgba(180,160,120,0.25)",
-                minHeight: "44px",
+                padding: "12px 24px",
               }}
             >
               Try Again
@@ -294,7 +307,6 @@ export default function GameHUD({
 
 // ── Sub-components ──
 
-/** Compact vital bar with label */
 function MiniBar({
   label,
   pct,
@@ -315,14 +327,17 @@ function MiniBar({
   const c = isWarn ? dimColor : color;
 
   return (
-    <div className="flex items-center gap-1.5 flex-1 min-w-0">
+    <div className="flex items-center flex-1 min-w-0" style={{ gap: "6px" }}>
       <span
-        className="text-[10px] font-bold tracking-wider"
-        style={{ color: c, minWidth: "2.2rem" }}
+        className="font-bold"
+        style={{ color: c, fontSize: "0.6rem", letterSpacing: "0.08em", minWidth: "1.8rem" }}
       >
         {label}
       </span>
-      <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: "rgba(20,20,15,0.7)" }}>
+      <div
+        className="flex-1 rounded-full overflow-hidden"
+        style={{ height: "5px", background: "rgba(20,20,15,0.7)" }}
+      >
         <div
           className="h-full rounded-full transition-all duration-300"
           style={{
@@ -333,8 +348,8 @@ function MiniBar({
         />
       </div>
       <span
-        className="text-[10px] font-medium tabular-nums"
-        style={{ color: c, minWidth: "1.2rem", textAlign: "right" }}
+        className="font-medium tabular-nums"
+        style={{ color: c, fontSize: "0.6rem", minWidth: "1.2rem", textAlign: "right" }}
       >
         {value}
       </span>
@@ -342,17 +357,15 @@ function MiniBar({
   );
 }
 
-/** Inventory readout */
-function InvItem({ icon, value, color }: { icon: string; value: number; color: string }) {
+function InvItem({ label, value, color }: { label: string; value: number; color: string }) {
   return (
-    <div className="flex items-center gap-0.5" style={{ color }}>
-      <span className="text-[10px] font-bold opacity-60">{icon}</span>
-      <span className="text-xs font-semibold tabular-nums">{value}</span>
+    <div className="flex items-center" style={{ color, gap: "4px" }}>
+      <span style={{ fontSize: "0.6rem", fontWeight: 600, opacity: 0.6 }}>{label}</span>
+      <span className="font-semibold tabular-nums" style={{ fontSize: "0.8rem" }}>{value}</span>
     </div>
   );
 }
 
-/** Action button — shows label + cost clearly */
 function ActionBtn({
   onClick,
   disabled,
@@ -372,20 +385,21 @@ function ActionBtn({
       disabled={disabled}
       className={`
         flex flex-col items-center justify-center
-        px-3 py-2.5 rounded-lg w-full
+        rounded-lg w-full
         text-xs transition-all cursor-pointer
         disabled:cursor-not-allowed
-        md:px-4 md:py-3 md:w-auto md:min-w-[100px]
+        md:w-auto md:min-w-[100px]
         ${urgent ? "action-btn-urgent" : ""}
       `}
       style={{
+        padding: "10px 14px",
         background: disabled ? "rgba(10,10,8,0.5)" : "rgba(20,20,15,0.7)",
         color: disabled ? C.dim : color,
         border: `1px solid ${disabled ? "rgba(40,40,30,0.3)" : color + "30"}`,
         opacity: disabled ? 0.45 : 1,
-        minHeight: "44px",
+        minHeight: "48px",
         boxShadow: urgent ? `0 0 12px ${color}33` : "none",
-        gap: "2px",
+        gap: "3px",
       }}
     >
       {children}

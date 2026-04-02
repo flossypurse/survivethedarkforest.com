@@ -126,7 +126,7 @@ export default function GameCanvas({ state }: { state: GameState }) {
 
       time += 1;
       const fireLevel = state.fire;
-      const isNight = state.phase === "night";
+
       const intensity = fireLevel / 100;
 
       const fireCx = w / 2;
@@ -142,7 +142,7 @@ export default function GameCanvas({ state }: { state: GameState }) {
         if (cloud.x > w + cloud.width) cloud.x = -cloud.width;
         if (cloud.x < -cloud.width) cloud.x = w + cloud.width;
 
-        const alpha = cloud.opacity * (isNight ? 1.2 : 0.8);
+        const alpha = cloud.opacity * 1.2;
         const grad = ctx.createRadialGradient(
           cloud.x + cloud.width / 2, cloud.y + cloud.height / 2, 0,
           cloud.x + cloud.width / 2, cloud.y + cloud.height / 2, cloud.width / 2
@@ -160,15 +160,15 @@ export default function GameCanvas({ state }: { state: GameState }) {
       // ── Tree silhouettes — 3 layers for depth ──
       drawTreeLayer(ctx, w, h, time, 0.18, 0.7, "#060610", 0.3);
       drawTreeLayer(ctx, w, h, time, 0.28, 0.85, "#080814", 0.6);
-      drawTreeLayer(ctx, w, h, time, 0.35, 1.0, isNight ? "#0a0a18" : "#0e0e20", 1.0);
+      drawTreeLayer(ctx, w, h, time, 0.35, 1.0, "#0a0a18", 1.0);
 
       // ── Ground plane ──
       const groundY = h * 0.38;
-      ctx.fillStyle = isNight ? "#050510" : "#080816";
+      ctx.fillStyle = "#050510";
       ctx.fillRect(0, groundY, w, h - groundY);
       const groundGrad = ctx.createLinearGradient(0, groundY - 15, 0, groundY + 30);
       groundGrad.addColorStop(0, "rgba(5,5,10,0)");
-      groundGrad.addColorStop(1, isNight ? "#050510" : "#080816");
+      groundGrad.addColorStop(1, "#050510");
       ctx.fillStyle = groundGrad;
       ctx.fillRect(0, groundY - 15, w, 45);
 
@@ -181,7 +181,7 @@ export default function GameCanvas({ state }: { state: GameState }) {
         if (fog.y < h * 0.5) fog.vy = Math.abs(fog.vy);
         if (fog.y > h * 0.9) fog.vy = -Math.abs(fog.vy);
 
-        const fogAlpha = fog.opacity * (isNight ? 1.8 : 1.0);
+        const fogAlpha = fog.opacity * 1.8;
         const fogGrad = ctx.createRadialGradient(
           fog.x, fog.y, 0,
           fog.x, fog.y, fog.size
@@ -274,7 +274,7 @@ export default function GameCanvas({ state }: { state: GameState }) {
 
         // Alpha — more visible, especially close
         const baseAlpha = 0.3 + (1 - distRatio) * 0.6;
-        const alpha = baseAlpha * (isNight ? 1 : 0.4);
+        const alpha = baseAlpha;
         if (alpha < 0.08) continue;
 
         // Eye glow halo
@@ -344,8 +344,8 @@ export default function GameCanvas({ state }: { state: GameState }) {
         w / 2, h / 2, Math.max(w, h) * 0.6
       );
       vignette.addColorStop(0, "rgba(0,0,0,0)");
-      vignette.addColorStop(0.5, `rgba(0,0,0,${isNight ? 0.3 : 0.15})`);
-      vignette.addColorStop(1, `rgba(0,0,0,${isNight ? 0.75 : 0.45})`);
+      vignette.addColorStop(0.5, "rgba(0,0,0,0.3)");
+      vignette.addColorStop(1, "rgba(0,0,0,0.75)");
       ctx.fillStyle = vignette;
       ctx.fillRect(0, 0, w, h);
 
@@ -358,7 +358,7 @@ export default function GameCanvas({ state }: { state: GameState }) {
       window.removeEventListener("resize", resize);
       cancelAnimationFrame(frameRef.current);
     };
-  }, [state.fire, state.phase, state.day, state.noise, state.creatures, initParticles, spawnEmber]);
+  }, [state.fire, state.noise, state.creatures, initParticles, spawnEmber]);
 
   return (
     <canvas

@@ -1,13 +1,12 @@
 // ── Time ──
 export const TICK_MS = 1000; // game ticks once per second
-export const DAY_DURATION_TICKS = 180; // 3 minutes of daylight
-export const NIGHT_DURATION_TICKS = 120; // 2 minutes of night
-export const CYCLE_TICKS = DAY_DURATION_TICKS + NIGHT_DURATION_TICKS;
+export const TICKS_PER_HOUR = 20; // one game "hour" every 20 seconds
+export const HOURS_TO_SURVIVE = 48; // rescue arrives after 48 hours
+export const TOTAL_TICKS = TICKS_PER_HOUR * HOURS_TO_SURVIVE; // 960 ticks = 16 min
 
 // ── Fire ──
 export const FIRE_MAX = 100;
-export const FIRE_BURN_RATE = 0.42; // fuel consumed per tick (day)
-export const FIRE_NIGHT_BURN_RATE = 0.68; // burns faster at night
+export const FIRE_BURN_RATE = 0.55; // fuel consumed per tick
 export const WOOD_PER_FUEL = 11; // fire fuel gained per wood added
 
 // ── Resources ──
@@ -39,33 +38,28 @@ export const NOISE_BUILD = 45; // very loud — construction
 export const NOISE_MAX = 100;
 
 // ── Creatures ──
-export const CREATURE_SPAWN_RATE = 0.025; // chance per tick (night only)
-export const CREATURE_SPAWN_ESCALATION = 0.005; // additional spawn chance per day
+export const CREATURE_SPAWN_RATE = 0.012; // chance per tick
+export const CREATURE_SPAWN_ESCALATION = 0.00015; // additional spawn chance per hour survived
 export const CREATURE_MAX = 8; // max simultaneous creatures
 export const CREATURE_SPAWN_DISTANCE = 100; // distance from camp at spawn
 export const CREATURE_ATTACK_RANGE = 8; // distance to trigger attack
 export const CREATURE_DESPAWN_DISTANCE = 130; // removed when this far
-export const CREATURE_DAY_DRIFT = 0.4; // outward drift speed during day
 
 // ── Detection ──
 export const DETECT_CLOSE_RANGE = 25; // precise 8-direction
 export const DETECT_MEDIUM_RANGE = 50; // vague 4-direction
 export const DETECT_COOLDOWN = 12; // ticks between detection log messages
 
-// ── Win condition ──
-export const DAYS_TO_SURVIVE = 7;
-
 // ── Storage key ──
-export const STORAGE_KEY = "dark-forest-state";
+export const STORAGE_KEY = "dark-forest-state-v2";
 
 // ── Config object (for simulation harness + future difficulty levels) ──
 
 export interface GameConfig {
-  DAY_DURATION_TICKS: number;
-  NIGHT_DURATION_TICKS: number;
+  TICKS_PER_HOUR: number;
+  HOURS_TO_SURVIVE: number;
   FIRE_MAX: number;
   FIRE_BURN_RATE: number;
-  FIRE_NIGHT_BURN_RATE: number;
   WOOD_PER_FUEL: number;
   WOOD_FORAGE_AMOUNT: number;
   FOOD_FORAGE_AMOUNT: number;
@@ -81,7 +75,6 @@ export interface GameConfig {
   TRAP_MATERIAL_COST: number;
   SHELTER_MATERIAL_COST: number;
   SHELTER_DEFENSE: number;
-  DAYS_TO_SURVIVE: number;
   // Noise
   NOISE_DECAY: number;
   NOISE_FORAGE: number;
@@ -96,7 +89,6 @@ export interface GameConfig {
   CREATURE_SPAWN_DISTANCE: number;
   CREATURE_ATTACK_RANGE: number;
   CREATURE_DESPAWN_DISTANCE: number;
-  CREATURE_DAY_DRIFT: number;
   // Detection
   DETECT_CLOSE_RANGE: number;
   DETECT_MEDIUM_RANGE: number;
@@ -104,11 +96,10 @@ export interface GameConfig {
 }
 
 export const DEFAULT_CONFIG: GameConfig = {
-  DAY_DURATION_TICKS,
-  NIGHT_DURATION_TICKS,
+  TICKS_PER_HOUR,
+  HOURS_TO_SURVIVE,
   FIRE_MAX,
   FIRE_BURN_RATE,
-  FIRE_NIGHT_BURN_RATE,
   WOOD_PER_FUEL,
   WOOD_FORAGE_AMOUNT,
   FOOD_FORAGE_AMOUNT,
@@ -124,7 +115,6 @@ export const DEFAULT_CONFIG: GameConfig = {
   TRAP_MATERIAL_COST,
   SHELTER_MATERIAL_COST,
   SHELTER_DEFENSE,
-  DAYS_TO_SURVIVE,
   NOISE_DECAY,
   NOISE_FORAGE,
   NOISE_STOKE,
@@ -137,7 +127,6 @@ export const DEFAULT_CONFIG: GameConfig = {
   CREATURE_SPAWN_DISTANCE,
   CREATURE_ATTACK_RANGE,
   CREATURE_DESPAWN_DISTANCE,
-  CREATURE_DAY_DRIFT,
   DETECT_CLOSE_RANGE,
   DETECT_MEDIUM_RANGE,
   DETECT_COOLDOWN,

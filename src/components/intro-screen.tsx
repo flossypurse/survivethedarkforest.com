@@ -26,7 +26,7 @@ const STORY_LINES = [
   { text: "", delay: 0, pause: 800 },
   { text: "Every sound you make... something is listening.", delay: 0, pause: 2500, style: "danger" },
   { text: "", delay: 0, pause: 600 },
-  { text: "Survive 7 days. At dawn on day 8, a rescue team will reach your signal.", delay: 0, pause: 2500 },
+  { text: "Your emergency beacon is transmitting. Rescue ETA: 48 hours.", delay: 0, pause: 2500 },
   { text: "", delay: 0, pause: 400 },
   { text: "Keep the fire alive. Find food. Stay quiet.", delay: 0, pause: 2000, style: "hint" },
   { text: "Or don't. The forest doesn't care.", delay: 200, pause: 2500 },

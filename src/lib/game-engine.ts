@@ -7,7 +7,6 @@ import { type GameState, type CreatureType, addLog } from "./game-state";
 // ── Deterministic RNG seeded by tick ──
 
 function seededRandom(tick: number, salt: number = 0): number {
-  // MurmurHash3 finalizer — uniform distribution across full [0, 1) range
   let h = (tick + salt * 374761393) | 0;
   h = Math.imul(h ^ (h >>> 16), 0x85ebca6b);
   h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35);
@@ -15,19 +14,19 @@ function seededRandom(tick: number, salt: number = 0): number {
   return (h >>> 0) / 0x100000000;
 }
 
-// ── Creature type parameters (internal, not in GameConfig) ──
+// ── Creature type parameters ──
 
 interface CreatureParams {
-  baseSpeed: number; // movement toward camp per tick
-  noiseFactor: number; // extra speed per (noise/max) unit
+  baseSpeed: number;
+  noiseFactor: number;
   damageMin: number;
   damageMax: number;
-  fireFleeThreshold: number; // flee if fire above this (-1 = never flee)
+  fireFleeThreshold: number;
   fleeSpeed: number;
-  fireAttract: boolean; // attracted to fire?
+  fireAttract: boolean;
   fireAttractThreshold: number;
-  fireAttractSpeed: number; // extra speed when attracted to fire
-  spawnWeight: number; // relative spawn probability
+  fireAttractSpeed: number;
+  spawnWeight: number;
 }
 
 const CREATURE_PARAMS: Record<CreatureType, CreatureParams> = {
@@ -46,8 +45,8 @@ const CREATURE_PARAMS: Record<CreatureType, CreatureParams> = {
   predator: {
     baseSpeed: 0.5,
     noiseFactor: 0.8,
-    damageMin: 12,
-    damageMax: 24,
+    damageMin: 8,
+    damageMax: 18,
     fireFleeThreshold: -1,
     fleeSpeed: 0,
     fireAttract: true,
@@ -58,8 +57,8 @@ const CREATURE_PARAMS: Record<CreatureType, CreatureParams> = {
   stalker: {
     baseSpeed: 0.35,
     noiseFactor: 0.2,
-    damageMin: 8,
-    damageMax: 16,
+    damageMin: 5,
+    damageMax: 12,
     fireFleeThreshold: -1,
     fleeSpeed: 0,
     fireAttract: false,
@@ -124,7 +123,7 @@ const CLOSE_SOUNDS: Record<CreatureType, string[]> = {
   ],
   stalker: [
     "You sense something watching",
-    "The hairs on your neck rise —\u2009something lurks",
+    "The hairs on your neck rise — something lurks",
     "A patient presence waits",
   ],
 };
@@ -135,8 +134,6 @@ const MEDIUM_SOUNDS: string[] = [
   "Branches shift",
   "Leaves crunch",
 ];
-
-// ── Attack messages ──
 
 const ATTACK_MESSAGES: Record<CreatureType, string[]> = {
   timid: [
@@ -163,33 +160,32 @@ export function tick(state: GameState, cfg: GameConfig = DEFAULT_CONFIG): GameSt
 
   const s = { ...state, creatures: [...state.creatures] };
   s.tick += 1;
-  s.phaseTick += 1;
+  s.ticksPlayed += 1;
+
+  // ── Hour tracking ──
+  const newHour = Math.floor(s.ticksPlayed / cfg.TICKS_PER_HOUR);
+  if (newHour > s.hour) {
+    s.hour = newHour;
+    const remaining = cfg.HOURS_TO_SURVIVE - s.hour;
+
+    if (remaining <= 0) {
+      s.status = "won";
+      addLog(s, "You hear rotors. A helicopter breaks through the canopy. You're rescued.", "success");
+      return s;
+    }
+
+    if (remaining <= 6) {
+      addLog(s, `${remaining} hour${remaining !== 1 ? "s" : ""} until rescue. Hold on.`, "success");
+    } else if (s.hour % 6 === 0) {
+      addLog(s, `${remaining} hours until rescue.`, "info");
+    }
+  }
 
   // ── Noise decay ──
   s.noise = Math.max(0, s.noise - cfg.NOISE_DECAY);
 
-  // ── Phase transitions ──
-  if (s.phase === "day" && s.phaseTick >= cfg.DAY_DURATION_TICKS) {
-    s.phase = "night";
-    s.phaseTick = 0;
-    addLog(s, "Night falls. The darkness presses in.", "danger");
-  } else if (s.phase === "night" && s.phaseTick >= cfg.NIGHT_DURATION_TICKS) {
-    s.phase = "day";
-    s.phaseTick = 0;
-    s.day += 1;
-
-    if (s.day > cfg.DAYS_TO_SURVIVE) {
-      s.status = "won";
-      addLog(s, "Dawn breaks on day 8. You survived the dark forest.", "success");
-      return s;
-    }
-
-    addLog(s, `Day ${s.day} begins. You made it through the night.`, "success");
-  }
-
   // ── Fire decay ──
-  const burnRate = s.phase === "night" ? cfg.FIRE_NIGHT_BURN_RATE : cfg.FIRE_BURN_RATE;
-  s.fire = Math.max(0, s.fire - burnRate);
+  s.fire = Math.max(0, s.fire - cfg.FIRE_BURN_RATE);
 
   if (s.fire <= 0) {
     addLog(s, "The fire has gone out. Darkness swallows you.", "danger");
@@ -197,7 +193,7 @@ export function tick(state: GameState, cfg: GameConfig = DEFAULT_CONFIG): GameSt
     return s;
   }
 
-  if (s.fire < 20 && s.phaseTick % 30 === 0) {
+  if (s.fire < 20 && s.tick % 30 === 0) {
     addLog(s, "The fire is dying. Add wood.", "danger");
   }
 
@@ -210,17 +206,16 @@ export function tick(state: GameState, cfg: GameConfig = DEFAULT_CONFIG): GameSt
       addLog(s, "You collapse from starvation.", "danger");
       return s;
     }
-    if (s.phaseTick % 20 === 0) {
+    if (s.tick % 20 === 0) {
       addLog(s, "You're starving. Eat something.", "danger");
     }
   }
 
-  // ── Creature spawning (night only) ──
-  // Fire acts as a beacon — higher fire slightly increases spawn rate
-  if (s.phase === "night" && s.creatures.length < cfg.CREATURE_MAX) {
-    const fireBeacon = 1 + (s.fire / cfg.FIRE_MAX) * 0.8; // up to 80% more spawns at max fire
+  // ── Creature spawning — always active, escalates over time ──
+  if (s.creatures.length < cfg.CREATURE_MAX) {
+    const fireBeacon = 1 + (s.fire / cfg.FIRE_MAX) * 0.8;
     const spawnChance = (cfg.CREATURE_SPAWN_RATE +
-      cfg.CREATURE_SPAWN_ESCALATION * (s.day - 1)) * fireBeacon;
+      cfg.CREATURE_SPAWN_ESCALATION * s.hour) * fireBeacon;
     if (seededRandom(s.tick, 50) < spawnChance) {
       const angle = seededRandom(s.tick, 51) * Math.PI * 2;
       const type = pickCreatureType(s.tick);
@@ -237,24 +232,13 @@ export function tick(state: GameState, cfg: GameConfig = DEFAULT_CONFIG): GameSt
 
   // ── Creature movement ──
   const noiseRatio = s.noise / cfg.NOISE_MAX;
-  s.creatures = s.creatures.map((c, _i) => {
+  s.creatures = s.creatures.map((c) => {
     const dist = distance(c.x, c.y);
-    if (dist < 0.1) return c; // at camp, will attack
+    if (dist < 0.1) return c;
 
     const params = CREATURE_PARAMS[c.type];
-
-    // Unit vector toward camp (origin)
     const dx = -c.x / dist;
     const dy = -c.y / dist;
-
-    // Daytime: drift away from camp
-    if (s.phase === "day") {
-      return {
-        ...c,
-        x: c.x - dx * cfg.CREATURE_DAY_DRIFT,
-        y: c.y - dy * cfg.CREATURE_DAY_DRIFT,
-      };
-    }
 
     // Fire flee check (timid creatures)
     if (params.fireFleeThreshold > 0 && s.fire > params.fireFleeThreshold && dist < 50) {
@@ -268,8 +252,7 @@ export function tick(state: GameState, cfg: GameConfig = DEFAULT_CONFIG): GameSt
     // Calculate approach speed
     let speed = params.baseSpeed + params.noiseFactor * noiseRatio;
 
-    // Darkness emboldens creatures — low fire means faster approach
-    // At fire 100: 1.0x speed. At fire 0: 2.0x speed.
+    // Darkness emboldens — low fire = faster approach
     const darknessFactor = 1 + (1 - s.fire / cfg.FIRE_MAX) * 1.0;
     speed *= darknessFactor;
 
@@ -278,7 +261,6 @@ export function tick(state: GameState, cfg: GameConfig = DEFAULT_CONFIG): GameSt
       speed += params.fireAttractSpeed * (s.fire / cfg.FIRE_MAX);
     }
 
-    // Small wander jitter so creatures don't all stack
     const jitterAngle = seededRandom(s.tick, 70 + c.id) * Math.PI * 2;
     const jitter = 0.15;
 
@@ -294,7 +276,6 @@ export function tick(state: GameState, cfg: GameConfig = DEFAULT_CONFIG): GameSt
     distance(c.x, c.y) <= cfg.CREATURE_ATTACK_RANGE
   );
   if (attackers.length > 0) {
-    // Remove attackers from creature list
     const attackerIds = new Set(attackers.map(a => a.id));
     s.creatures = s.creatures.filter(c => !attackerIds.has(c.id));
 
@@ -314,7 +295,6 @@ export function tick(state: GameState, cfg: GameConfig = DEFAULT_CONFIG): GameSt
 
       s.health = Math.max(0, s.health - damage);
 
-      // Traps can break
       if (s.traps > 0 && seededRandom(s.tick, 13 + c.id) < 0.3) {
         s.traps -= 1;
         addLog(s, "A trap is destroyed in the attack.", "info");
@@ -329,8 +309,6 @@ export function tick(state: GameState, cfg: GameConfig = DEFAULT_CONFIG): GameSt
   }
 
   // ── Detection — player hearing creatures ──
-  // Fire provides light: detection range scales with fire brightness
-  // At fire 0: 30% range. At fire 100: 100% range.
   if (s.tick % cfg.DETECT_COOLDOWN === 0 && s.creatures.length > 0) {
     const fireVisibility = 0.3 + 0.7 * (s.fire / cfg.FIRE_MAX);
     const closeRange = cfg.DETECT_CLOSE_RANGE * fireVisibility;
@@ -344,13 +322,11 @@ export function tick(state: GameState, cfg: GameConfig = DEFAULT_CONFIG): GameSt
 
     for (const { c, dist } of sorted) {
       if (dist < closeRange) {
-        // Precise 8-direction + creature-specific sound
         const dir = getDirection8(c.x, c.y);
         const sounds = CLOSE_SOUNDS[c.type];
         const sound = sounds[Math.floor(seededRandom(s.tick, 90 + c.id) * sounds.length)];
         addLog(s, `${sound} to the ${dir}.`, "danger");
       } else {
-        // Vague 4-direction
         const dir = getDirection4(c.x, c.y);
         const sound = MEDIUM_SOUNDS[
           Math.floor(seededRandom(s.tick, 95 + c.id) * MEDIUM_SOUNDS.length)
@@ -360,17 +336,19 @@ export function tick(state: GameState, cfg: GameConfig = DEFAULT_CONFIG): GameSt
     }
   }
 
-  // ── Creature cleanup — remove those that drifted too far ──
+  // ── Creature cleanup ──
   s.creatures = s.creatures.filter(c =>
     distance(c.x, c.y) < cfg.CREATURE_DESPAWN_DISTANCE
   );
 
-  // ── Ambient events (rare, for flavor) ──
-  if (s.phaseTick % 45 === 0 && s.phase === "night" && s.creatures.length === 0) {
+  // ── Ambient events ──
+  if (s.tick % 45 === 0 && s.creatures.length === 0) {
     const ambients = [
       "An owl calls in the distance.",
       "Wind rustles the canopy above.",
       "The fire pops and sparks swirl upward.",
+      "Something drips from the trees.",
+      "A branch creaks somewhere far away.",
     ];
     const idx = Math.floor(seededRandom(s.tick, 33) * ambients.length);
     addLog(s, ambients[idx], "info");
@@ -393,17 +371,12 @@ export function addWoodToFire(state: GameState, cfg: GameConfig = DEFAULT_CONFIG
 
 export function forage(state: GameState, cfg: GameConfig = DEFAULT_CONFIG): GameState {
   if (state.status !== "playing") return state;
-  if (state.phase === "night") {
-    addLog(state, "Too dangerous to forage at night.", "danger");
-    return state;
-  }
   if (state.tick < state.forageCooldownUntil) return state;
 
   const s = { ...state };
   s.forageCooldownUntil = s.tick + cfg.FORAGE_COOLDOWN_TICKS;
   s.noise = Math.min(cfg.NOISE_MAX, s.noise + cfg.NOISE_FORAGE);
 
-  // Randomize what you find
   const roll = seededRandom(s.tick, 77);
   if (roll < 0.45) {
     s.wood += cfg.WOOD_FORAGE_AMOUNT;
@@ -478,8 +451,7 @@ export function simulateOfflineTime(state: GameState, cfg: GameConfig = DEFAULT_
     const offlineMinutes = Math.round(ticksToSimulate / 60);
     s.log.splice(logBefore, 0, {
       tick: state.tick,
-      day: state.day,
-      phase: state.phase,
+      hour: state.hour,
       message: `— ${offlineMinutes} minute${offlineMinutes === 1 ? "" : "s"} passed while you were away —`,
       type: "info",
     });

@@ -7,7 +7,6 @@ import {
 
 // ── Types ──
 
-export type Phase = "day" | "night";
 export type GameStatus = "playing" | "dead" | "won";
 export type CreatureType = "timid" | "predator" | "stalker";
 
@@ -21,8 +20,7 @@ export interface Creature {
 
 export interface LogEntry {
   tick: number;
-  day: number;
-  phase: Phase;
+  hour: number;
   message: string;
   type: "info" | "danger" | "success" | "discovery";
 }
@@ -31,9 +29,8 @@ export interface GameState {
   // meta
   status: GameStatus;
   tick: number;
-  day: number;
-  phase: Phase;
-  phaseTick: number; // ticks into current phase
+  ticksPlayed: number; // ticks since game start (tick may be offset for RNG)
+  hour: number; // current hour (0-based, counts up)
 
   // survival
   health: number;
@@ -72,9 +69,8 @@ export function createInitialState(): GameState {
   return {
     status: "playing",
     tick: 0,
-    day: 1,
-    phase: "day",
-    phaseTick: 0,
+    ticksPlayed: 0,
+    hour: 0,
 
     health: MAX_HEALTH,
     hunger: 0,
@@ -96,16 +92,14 @@ export function createInitialState(): GameState {
     log: [
       {
         tick: 0,
-        day: 1,
-        phase: "day",
-        message: "You wake in a dark forest. A small fire crackles beside you.",
+        hour: 0,
+        message: "You come to. A small fire crackles — lit from wreckage.",
         type: "info",
       },
       {
         tick: 0,
-        day: 1,
-        phase: "day",
-        message: "Gather wood to keep it alive. Find food. Survive.",
+        hour: 0,
+        message: "48 hours until rescue. Keep the fire alive.",
         type: "info",
       },
     ],
@@ -130,7 +124,6 @@ export function loadState(): GameState | null {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as GameState;
-    // Basic validation
     if (typeof parsed.tick !== "number" || typeof parsed.fire !== "number") {
       return null;
     }
@@ -159,8 +152,7 @@ export function addLog(
 ): void {
   state.log.push({
     tick: state.tick,
-    day: state.day,
-    phase: state.phase,
+    hour: state.hour,
     message,
     type,
   });
