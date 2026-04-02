@@ -20,30 +20,37 @@ import {
 import { TICK_MS } from "@/lib/constants";
 import GameCanvas from "./game-canvas";
 import GameHUD from "./game-hud";
+import IntroScreen from "./intro-screen";
 
 export default function GameScreen() {
   const [state, setState] = useState<GameState | null>(null);
+  const [showIntro, setShowIntro] = useState(true);
   const stateRef = useRef<GameState | null>(null);
 
-  // Keep ref in sync for the interval callback
   useEffect(() => {
     stateRef.current = state;
   }, [state]);
 
-  // Load or create state on mount
+  // Check if there's an existing save — skip intro if resuming
   useEffect(() => {
-    let initial = loadState();
-    if (initial) {
-      // Catch up on offline time
-      initial = simulateOfflineTime(initial);
-    } else {
-      initial = createInitialState();
+    const existing = loadState();
+    if (existing) {
+      const resumed = simulateOfflineTime(existing);
+      setState(resumed);
+      setShowIntro(false); // skip intro for returning players
     }
-    setState(initial);
+  }, []);
+
+  const handleIntroComplete = useCallback(() => {
+    setShowIntro(false);
+    if (!stateRef.current) {
+      setState(createInitialState());
+    }
   }, []);
 
   // Game loop
   useEffect(() => {
+    if (showIntro) return;
     const interval = setInterval(() => {
       const current = stateRef.current;
       if (!current || current.status !== "playing") return;
@@ -54,7 +61,7 @@ export default function GameScreen() {
     }, TICK_MS);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [showIntro]);
 
   // Auto-save every 5 seconds
   useEffect(() => {
@@ -62,7 +69,6 @@ export default function GameScreen() {
       const current = stateRef.current;
       if (current) saveState(current);
     }, 5000);
-
     return () => clearInterval(interval);
   }, []);
 
@@ -84,14 +90,21 @@ export default function GameScreen() {
   const handleBuildShelter = useCallback(() => setState((s) => s ? buildShelter(s) : s), []);
   const handleRestart = useCallback(() => {
     clearState();
-    setState(createInitialState());
+    setShowIntro(true);
+    setState(null);
   }, []);
 
+  // Intro screen
+  if (showIntro) {
+    return <IntroScreen onComplete={handleIntroComplete} />;
+  }
+
+  // Loading
   if (!state) {
     return (
       <div
         className="h-screen w-screen flex items-center justify-center"
-        style={{ background: "#08080f", color: "#6b7280" }}
+        style={{ background: "#05050a", color: "#6b7280" }}
       >
         <div className="text-sm animate-pulse">Entering the forest...</div>
       </div>
