@@ -40,6 +40,14 @@ interface EyePair {
   dx: number; // drift speed
 }
 
+interface SoundRipple {
+  x: number;
+  y: number;
+  radius: number;
+  maxRadius: number;
+  life: number;
+}
+
 // ── Color palette ──
 const BG = "#08080f";
 const TREE_COLOR = "#0d0d1a";
@@ -52,6 +60,8 @@ export default function GameCanvas({ state }: { state: GameState }) {
   const fogRef = useRef<FogParticle[]>([]);
   const starsRef = useRef<Star[]>([]);
   const eyesRef = useRef<EyePair[]>([]);
+  const ripplesRef = useRef<SoundRipple[]>([]);
+  const prevNoiseRef = useRef(0);
   const initedRef = useRef(false);
 
   // Initialize particles once
@@ -95,24 +105,6 @@ export default function GameCanvas({ state }: { state: GameState }) {
       hue: 15 + Math.random() * 30,
     });
   }, []);
-
-  // Spawn eyes in darkness
-  const maybeSpawnEyes = useCallback(
-    (w: number, h: number, isNight: boolean, day: number) => {
-      if (!isNight || eyesRef.current.length >= 3) return;
-      if (Math.random() > 0.005 + day * 0.002) return;
-
-      const side = Math.random() < 0.5 ? -1 : 1;
-      eyesRef.current.push({
-        x: side === -1 ? w * 0.05 + Math.random() * w * 0.15 : w * 0.8 + Math.random() * w * 0.15,
-        y: h * 0.4 + Math.random() * h * 0.3,
-        blinkTimer: 100 + Math.random() * 200,
-        visible: true,
-        dx: side * (0.05 + Math.random() * 0.1),
-      });
-    },
-    []
-  );
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -256,33 +248,73 @@ export default function GameCanvas({ state }: { state: GameState }) {
         return true;
       });
 
-      // ── Eyes in darkness ──
-      maybeSpawnEyes(w, h, isNight, state.day);
+      // ── Creature eyes (positioned from actual game state) ──
+      for (const creature of state.creatures) {
+        // Map creature world coords to screen coords
+        // Creatures are at distance ~8-130 from origin; map to screen space around fire
+        const dist = Math.sqrt(creature.x * creature.x + creature.y * creature.y);
+        if (dist < 10) continue; // too close, about to attack
 
-      eyesRef.current = eyesRef.current.filter((eye) => {
-        eye.blinkTimer -= 1;
-        if (eye.blinkTimer <= 0) {
-          eye.visible = !eye.visible;
-          eye.blinkTimer = eye.visible ? 80 + Math.random() * 150 : 5 + Math.random() * 10;
-        }
-        eye.x += eye.dx;
+        // Normalize creature position to angle, map to screen edge area
+        const angle = Math.atan2(creature.y, creature.x);
+        const distRatio = Math.min(1, dist / 100); // 0 = at camp, 1 = far away
 
-        // Remove if out of bounds or too close to fire
-        const distToFire = Math.hypot(eye.x - fireCx, eye.y - fireCy);
-        if (eye.x < -20 || eye.x > w + 20 || distToFire < glowRadius * 0.6) {
-          return false;
-        }
+        // Screen position: closer creatures are nearer to fire, far ones at edges
+        const screenDist = glowRadius * 0.6 + distRatio * (Math.min(w, h) * 0.35);
+        const eyeX = fireCx + Math.cos(angle) * screenDist;
+        const eyeY = fireCy + Math.sin(angle) * screenDist * 0.6; // compress vertically
 
-        if (eye.visible) {
-          const eyeAlpha = 0.4 + Math.sin(time * 0.03) * 0.2;
-          ctx.fillStyle = `rgba(200, 180, 50, ${eyeAlpha})`;
-          ctx.beginPath();
-          ctx.ellipse(eye.x - 4, eye.y, 2, 1.2, 0, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.beginPath();
-          ctx.ellipse(eye.x + 4, eye.y, 2, 1.2, 0, 0, Math.PI * 2);
-          ctx.fill();
-        }
+        // Only show if on screen and outside fire glow
+        if (eyeX < -20 || eyeX > w + 20 || eyeY < 0 || eyeY > h) continue;
+
+        // Blink using creature id as seed
+        const blinkCycle = Math.sin(time * 0.02 + creature.id * 7.3);
+        if (blinkCycle > 0.9) continue; // blink
+
+        // Alpha based on distance — closer = brighter
+        const alpha = (0.15 + (1 - distRatio) * 0.5) * (isNight ? 1 : 0.3);
+        if (alpha < 0.05) continue;
+
+        // Eye color by type
+        const eyeColors: Record<string, string> = {
+          timid: `rgba(180, 200, 140, ${alpha})`,
+          predator: `rgba(220, 140, 40, ${alpha})`,
+          stalker: `rgba(160, 120, 200, ${alpha})`,
+        };
+        ctx.fillStyle = eyeColors[creature.type] || `rgba(200, 180, 50, ${alpha})`;
+
+        const eyeSize = 1.2 + (1 - distRatio) * 1.2;
+        ctx.beginPath();
+        ctx.ellipse(eyeX - 3.5, eyeY, eyeSize, eyeSize * 0.7, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.ellipse(eyeX + 3.5, eyeY, eyeSize, eyeSize * 0.7, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // ── Sound ripples (when noise spikes) ──
+      if (state.noise > prevNoiseRef.current + 5) {
+        const rippleSize = 30 + (state.noise / 100) * 80;
+        ripplesRef.current.push({
+          x: fireCx,
+          y: fireCy,
+          radius: 10,
+          maxRadius: rippleSize,
+          life: 1,
+        });
+      }
+      prevNoiseRef.current = state.noise;
+
+      ripplesRef.current = ripplesRef.current.filter((r) => {
+        r.radius += 1.5;
+        r.life -= 0.025;
+        if (r.life <= 0) return false;
+
+        ctx.beginPath();
+        ctx.arc(r.x, r.y, r.radius, 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(201, 160, 212, ${r.life * 0.25})`;
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
 
         return true;
       });
@@ -306,7 +338,7 @@ export default function GameCanvas({ state }: { state: GameState }) {
       window.removeEventListener("resize", resize);
       cancelAnimationFrame(frameRef.current);
     };
-  }, [state.fire, state.phase, state.day, initParticles, spawnEmber, maybeSpawnEyes]);
+  }, [state.fire, state.phase, state.day, state.noise, state.creatures, initParticles, spawnEmber]);
 
   return (
     <canvas

@@ -9,6 +9,15 @@ import {
 
 export type Phase = "day" | "night";
 export type GameStatus = "playing" | "dead" | "won";
+export type CreatureType = "timid" | "predator" | "stalker";
+
+export interface Creature {
+  id: number;
+  type: CreatureType;
+  x: number;
+  y: number;
+  spawnTick: number;
+}
 
 export interface LogEntry {
   tick: number;
@@ -40,6 +49,13 @@ export interface GameState {
   traps: number;
   hasShelter: boolean;
 
+  // noise — 0 (silent) to 100 (deafening)
+  noise: number;
+
+  // creatures in the forest
+  creatures: Creature[];
+  nextCreatureId: number;
+
   // cooldowns (tick when action becomes available)
   forageCooldownUntil: number;
 
@@ -70,6 +86,10 @@ export function createInitialState(): GameState {
 
     traps: 0,
     hasShelter: false,
+
+    noise: 0,
+    creatures: [],
+    nextCreatureId: 1,
 
     forageCooldownUntil: 0,
 
