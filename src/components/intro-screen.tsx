@@ -80,14 +80,18 @@ export default function IntroScreen({ onComplete }: { onComplete: () => void }) 
 
   return (
     <div
-      className="fixed inset-0 flex flex-col items-center justify-center z-50 transition-opacity duration-700"
+      className="fixed inset-0 flex flex-col items-center justify-end z-50 transition-opacity duration-700"
       style={{
         background: "#02020a",
         opacity: fadeOut ? 0 : 1,
+        paddingBottom: "25vh",
       }}
     >
-      {/* Story text */}
-      <div className="max-w-lg px-6 md:px-0 flex flex-col gap-1 min-h-[200px]">
+      {/* Story text — fixed height, anchored to bottom so new lines don't push content up */}
+      <div
+        className="max-w-lg w-full flex flex-col justify-end"
+        style={{ padding: "0 24px", height: "280px", gap: "4px" }}
+      >
         {displayLines.slice(recentStart).map((line, i) => {
           const globalIdx = recentStart + i;
           const age = visibleLines - globalIdx - 1; // 0 = newest
@@ -132,11 +136,13 @@ export default function IntroScreen({ onComplete }: { onComplete: () => void }) 
       {showSkip && (
         <button
           onClick={startGame}
-          className="mt-8 px-5 py-2.5 rounded-lg text-xs font-medium cursor-pointer intro-fade-in"
+          className="rounded-lg text-xs font-medium cursor-pointer intro-fade-in"
           style={{
             background: "rgba(20,20,15,0.6)",
             color: "#6b7280",
             border: "1px solid rgba(100,100,90,0.2)",
+            padding: "12px 24px",
+            marginTop: "32px",
           }}
         >
           {visibleLines >= STORY_LINES.length ? "Enter the forest" : "Skip intro"}

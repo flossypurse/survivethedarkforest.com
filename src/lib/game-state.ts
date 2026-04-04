@@ -43,6 +43,7 @@ export interface GameState {
   materials: number;
 
   // upgrades
+  hasClub: boolean;
   traps: number;
   hasShelter: boolean;
 
@@ -80,6 +81,7 @@ export function createInitialState(): GameState {
     food: 3,
     materials: 0,
 
+    hasClub: false,
     traps: 0,
     hasShelter: false,
 

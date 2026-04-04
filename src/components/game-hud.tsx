@@ -8,8 +8,10 @@ import {
   MAX_HUNGER,
   NOISE_MAX,
   HOURS_TO_SURVIVE,
+  CLUB_MATERIAL_COST,
   TRAP_MATERIAL_COST,
   SHELTER_MATERIAL_COST,
+  RELIGHT_WOOD_COST,
 } from "@/lib/constants";
 
 // ── Palette ──
@@ -41,6 +43,8 @@ interface Props {
   onEat: () => void;
   onBuildTrap: () => void;
   onBuildShelter: () => void;
+  onBuildClub: () => void;
+  onRelightFire: () => void;
   onRestart: () => void;
 }
 
@@ -92,6 +96,8 @@ export default function GameHUD({
   onEat,
   onBuildTrap,
   onBuildShelter,
+  onBuildClub,
+  onRelightFire,
   onRestart,
 }: Props) {
   const isPlaying = state.status === "playing";
@@ -204,13 +210,10 @@ export default function GameHUD({
             >
               <InvItem label="Wood" value={state.wood} color={C.wood} />
               <InvItem label="Food" value={state.food} color={C.food} />
-              <InvItem label="Mat" value={state.materials} color={C.materials} />
+              <InvItem label="Material" value={state.materials} color={C.materials} />
+              {state.hasClub && <InvTag label="CLUB" color={C.defense} />}
               {state.traps > 0 && <InvItem label="Traps" value={state.traps} color={C.defense} />}
-              {state.hasShelter && (
-                <span style={{ color: C.defense, fontSize: "0.65rem", fontWeight: 600, letterSpacing: "0.04em" }}>
-                  SHELTER
-                </span>
-              )}
+              {state.hasShelter && <InvTag label="SHELTER" color={C.defense} />}
             </div>
 
             {/* Actions */}
@@ -218,25 +221,38 @@ export default function GameHUD({
               className="grid grid-cols-2 md:flex md:flex-wrap"
               style={{ gap: "8px" }}
             >
-              <ActionBtn
-                onClick={onAddWood}
-                disabled={state.wood <= 0}
-                color={C.fire}
-                urgent={firePct < 0.3 && state.wood > 0}
-              >
-                <span className="font-semibold">Stoke Fire</span>
-                <span className="action-cost">-1 wood</span>
-              </ActionBtn>
+              {/* Relight fire — only shows when fire is out */}
+              {state.fire <= 0 ? (
+                <ActionBtn
+                  onClick={onRelightFire}
+                  disabled={state.wood < RELIGHT_WOOD_COST}
+                  color={C.fire}
+                  urgent={state.wood >= RELIGHT_WOOD_COST}
+                >
+                  <span className="font-semibold">Relight Fire</span>
+                  <span className="action-cost">-{RELIGHT_WOOD_COST} wood</span>
+                </ActionBtn>
+              ) : (
+                <ActionBtn
+                  onClick={onAddWood}
+                  disabled={state.wood <= 0}
+                  color={C.fire}
+                  urgent={firePct < 0.3 && state.wood > 0}
+                >
+                  <span className="font-semibold">Stoke Fire</span>
+                  <span className="action-cost">-1 wood</span>
+                </ActionBtn>
+              )}
 
               <ActionBtn
                 onClick={onForage}
-                disabled={forageCooldown > 0}
+                disabled={forageCooldown > 0 || state.fire <= 0}
                 color={C.forage}
               >
                 <span className="font-semibold">
                   {forageCooldown > 0 ? `Forage (${forageCooldown}s)` : "Forage"}
                 </span>
-                <span className="action-cost">loud — find stuff</span>
+                <span className="action-cost">{state.fire <= 0 ? "need fire" : "loud — find stuff"}</span>
               </ActionBtn>
 
               <ActionBtn
@@ -249,13 +265,24 @@ export default function GameHUD({
                 <span className="action-cost">-1 food</span>
               </ActionBtn>
 
+              {!state.hasClub && (
+                <ActionBtn
+                  onClick={onBuildClub}
+                  disabled={state.materials < CLUB_MATERIAL_COST}
+                  color={C.defense}
+                >
+                  <span className="font-semibold">Club</span>
+                  <span className="action-cost">-{CLUB_MATERIAL_COST} material</span>
+                </ActionBtn>
+              )}
+
               <ActionBtn
                 onClick={onBuildTrap}
                 disabled={state.materials < TRAP_MATERIAL_COST}
                 color={C.defense}
               >
                 <span className="font-semibold">Trap</span>
-                <span className="action-cost">-{TRAP_MATERIAL_COST} mat</span>
+                <span className="action-cost">-{TRAP_MATERIAL_COST} material</span>
               </ActionBtn>
 
               {!state.hasShelter && (
@@ -265,7 +292,7 @@ export default function GameHUD({
                   color={C.defense}
                 >
                   <span className="font-semibold">Shelter</span>
-                  <span className="action-cost">-{SHELTER_MATERIAL_COST} mat</span>
+                  <span className="action-cost">-{SHELTER_MATERIAL_COST} material</span>
                 </ActionBtn>
               )}
             </div>
@@ -354,6 +381,14 @@ function MiniBar({
         {value}
       </span>
     </div>
+  );
+}
+
+function InvTag({ label, color }: { label: string; color: string }) {
+  return (
+    <span style={{ color, fontSize: "0.6rem", fontWeight: 600, letterSpacing: "0.04em" }}>
+      {label}
+    </span>
   );
 }
 

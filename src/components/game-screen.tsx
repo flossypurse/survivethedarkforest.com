@@ -15,6 +15,8 @@ import {
   eat,
   buildTrap,
   buildShelter,
+  buildClub,
+  relightFire,
   simulateOfflineTime,
 } from "@/lib/game-engine";
 import { TICK_MS } from "@/lib/constants";
@@ -88,6 +90,8 @@ export default function GameScreen() {
   const handleEat = useCallback(() => setState((s) => s ? eat(s) : s), []);
   const handleBuildTrap = useCallback(() => setState((s) => s ? buildTrap(s) : s), []);
   const handleBuildShelter = useCallback(() => setState((s) => s ? buildShelter(s) : s), []);
+  const handleBuildClub = useCallback(() => setState((s) => s ? buildClub(s) : s), []);
+  const handleRelightFire = useCallback(() => setState((s) => s ? relightFire(s) : s), []);
   const handleRestart = useCallback(() => {
     clearState();
     setShowIntro(true);
@@ -121,6 +125,8 @@ export default function GameScreen() {
         onEat={handleEat}
         onBuildTrap={handleBuildTrap}
         onBuildShelter={handleBuildShelter}
+        onBuildClub={handleBuildClub}
+        onRelightFire={handleRelightFire}
         onRestart={handleRestart}
       />
     </div>

@@ -188,12 +188,17 @@ export function tick(state: GameState, cfg: GameConfig = DEFAULT_CONFIG): GameSt
   s.fire = Math.max(0, s.fire - cfg.FIRE_BURN_RATE);
 
   if (s.fire <= 0) {
-    addLog(s, "The fire has gone out. Darkness swallows you.", "danger");
-    s.status = "dead";
-    return s;
-  }
-
-  if (s.fire < 20 && s.tick % 30 === 0) {
+    // Fire out — darkness penalty, not instant death
+    s.health = Math.max(0, s.health - cfg.DARKNESS_HEALTH_DAMAGE);
+    if (s.health <= 0) {
+      s.status = "dead";
+      addLog(s, "The darkness took you. You needed that fire.", "danger");
+      return s;
+    }
+    if (s.tick % 15 === 0) {
+      addLog(s, "Total darkness. You're losing blood. Relight the fire.", "danger");
+    }
+  } else if (s.fire < 20 && s.tick % 30 === 0) {
     addLog(s, "The fire is dying. Add wood.", "danger");
   }
 
@@ -284,6 +289,7 @@ export function tick(state: GameState, cfg: GameConfig = DEFAULT_CONFIG): GameSt
       const rawDamage = params.damageMin +
         seededRandom(s.tick, 60 + c.id) * (params.damageMax - params.damageMin);
       const defense = cfg.BASE_DEFENSE +
+        (s.hasClub ? cfg.CLUB_DEFENSE : 0) +
         s.traps * cfg.TRAP_DEFENSE +
         (s.hasShelter ? cfg.SHELTER_DEFENSE : 0);
       const damage = Math.max(1, rawDamage - defense);
@@ -371,6 +377,10 @@ export function addWoodToFire(state: GameState, cfg: GameConfig = DEFAULT_CONFIG
 
 export function forage(state: GameState, cfg: GameConfig = DEFAULT_CONFIG): GameState {
   if (state.status !== "playing") return state;
+  if (state.fire <= 0) {
+    addLog(state, "Can't forage in total darkness. Relight the fire first.", "danger");
+    return state;
+  }
   if (state.tick < state.forageCooldownUntil) return state;
 
   const s = { ...state };
@@ -378,20 +388,20 @@ export function forage(state: GameState, cfg: GameConfig = DEFAULT_CONFIG): Game
   s.noise = Math.min(cfg.NOISE_MAX, s.noise + cfg.NOISE_FORAGE);
 
   const roll = seededRandom(s.tick, 77);
-  if (roll < 0.45) {
+  if (roll < 0.40) {
     s.wood += cfg.WOOD_FORAGE_AMOUNT;
     addLog(s, `You gather ${cfg.WOOD_FORAGE_AMOUNT} wood from the forest edge.`, "info");
-  } else if (roll < 0.75) {
+  } else if (roll < 0.65) {
     s.food += cfg.FOOD_FORAGE_AMOUNT;
     addLog(s, `You find ${cfg.FOOD_FORAGE_AMOUNT} food — berries and roots.`, "info");
-  } else if (roll < 0.9) {
+  } else if (roll < 0.85) {
     s.wood += cfg.WOOD_FORAGE_AMOUNT;
     s.food += 1;
     addLog(s, "A good haul — wood and some edible mushrooms.", "success");
   } else {
     s.materials += cfg.MATERIAL_FORAGE_AMOUNT;
     s.wood += 1;
-    addLog(s, "You find useful materials — stone and vine.", "discovery");
+    addLog(s, `You find ${cfg.MATERIAL_FORAGE_AMOUNT} materials — stone and vine.`, "discovery");
   }
 
   return s;
@@ -426,6 +436,27 @@ export function buildShelter(state: GameState, cfg: GameConfig = DEFAULT_CONFIG)
   s.hasShelter = true;
   s.noise = Math.min(cfg.NOISE_MAX, s.noise + cfg.NOISE_BUILD);
   addLog(s, "You build a rough shelter. It won't stop everything, but it helps.", "success");
+  return s;
+}
+
+export function buildClub(state: GameState, cfg: GameConfig = DEFAULT_CONFIG): GameState {
+  if (state.status !== "playing" || state.hasClub || state.materials < cfg.CLUB_MATERIAL_COST)
+    return state;
+  const s = { ...state };
+  s.materials -= cfg.CLUB_MATERIAL_COST;
+  s.hasClub = true;
+  s.noise = Math.min(cfg.NOISE_MAX, s.noise + cfg.NOISE_BUILD);
+  addLog(s, "You fashion a heavy club from a branch and stone. Better than nothing.", "success");
+  return s;
+}
+
+export function relightFire(state: GameState, cfg: GameConfig = DEFAULT_CONFIG): GameState {
+  if (state.status !== "playing" || state.fire > 0 || state.wood < cfg.RELIGHT_WOOD_COST) return state;
+  const s = { ...state };
+  s.wood -= cfg.RELIGHT_WOOD_COST;
+  s.fire = 20; // starts low — you just got it going
+  s.noise = Math.min(cfg.NOISE_MAX, s.noise + cfg.NOISE_STOKE);
+  addLog(s, "You strike the lighter. A flame catches. The darkness retreats.", "success");
   return s;
 }
 

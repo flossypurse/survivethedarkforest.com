@@ -12,7 +12,7 @@ export const WOOD_PER_FUEL = 11; // fire fuel gained per wood added
 // ── Resources ──
 export const WOOD_FORAGE_AMOUNT = 2;
 export const FOOD_FORAGE_AMOUNT = 1;
-export const MATERIAL_FORAGE_AMOUNT = 1;
+export const MATERIAL_FORAGE_AMOUNT = 2;
 export const FORAGE_COOLDOWN_TICKS = 10; // seconds between forages
 
 // ── Survival ──
@@ -24,10 +24,16 @@ export const MAX_HUNGER = 100; // 0 = full, 100 = starving
 
 // ── Defense ──
 export const BASE_DEFENSE = 1;
+export const CLUB_DEFENSE = 2;
+export const CLUB_MATERIAL_COST = 2;
 export const TRAP_DEFENSE = 3;
 export const TRAP_MATERIAL_COST = 4;
 export const SHELTER_MATERIAL_COST = 8;
 export const SHELTER_DEFENSE = 5;
+
+// ── Fire out penalty ──
+export const DARKNESS_HEALTH_DAMAGE = 0.3; // health lost per tick in total darkness
+export const RELIGHT_WOOD_COST = 2; // wood needed to relight fire
 
 // ── Noise ──
 export const NOISE_DECAY = 2; // noise reduction per tick
@@ -71,10 +77,14 @@ export interface GameConfig {
   FOOD_PER_EAT: number;
   MAX_HUNGER: number;
   BASE_DEFENSE: number;
+  CLUB_DEFENSE: number;
+  CLUB_MATERIAL_COST: number;
   TRAP_DEFENSE: number;
   TRAP_MATERIAL_COST: number;
   SHELTER_MATERIAL_COST: number;
   SHELTER_DEFENSE: number;
+  DARKNESS_HEALTH_DAMAGE: number;
+  RELIGHT_WOOD_COST: number;
   // Noise
   NOISE_DECAY: number;
   NOISE_FORAGE: number;
@@ -111,10 +121,14 @@ export const DEFAULT_CONFIG: GameConfig = {
   FOOD_PER_EAT,
   MAX_HUNGER,
   BASE_DEFENSE,
+  CLUB_DEFENSE,
+  CLUB_MATERIAL_COST,
   TRAP_DEFENSE,
   TRAP_MATERIAL_COST,
   SHELTER_MATERIAL_COST,
   SHELTER_DEFENSE,
+  DARKNESS_HEALTH_DAMAGE,
+  RELIGHT_WOOD_COST,
   NOISE_DECAY,
   NOISE_FORAGE,
   NOISE_STOKE,

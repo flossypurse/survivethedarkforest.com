@@ -53,6 +53,7 @@ export default function GameCanvas({ state }: { state: GameState }) {
   const cloudsRef = useRef<Cloud[]>([]);
   const ripplesRef = useRef<SoundRipple[]>([]);
   const prevNoiseRef = useRef(0);
+  const eyePositionsRef = useRef<Map<number, { x: number; y: number }>>(new Map());
   const initedRef = useRef(false);
 
   const initParticles = useCallback((w: number, h: number) => {
@@ -254,8 +255,10 @@ export default function GameCanvas({ state }: { state: GameState }) {
         return true;
       });
 
-      // ── Creature eyes — bigger, glowing, with halo ──
+      // ── Creature eyes — smooth positions via lerping ──
+      const activeIds = new Set<number>();
       for (const creature of state.creatures) {
+        activeIds.add(creature.id);
         const dist = Math.sqrt(creature.x * creature.x + creature.y * creature.y);
         if (dist < 10) continue;
 
@@ -263,8 +266,15 @@ export default function GameCanvas({ state }: { state: GameState }) {
         const distRatio = Math.min(1, dist / 100);
 
         const screenDist = glowRadius * 0.5 + distRatio * (Math.min(w, h) * 0.38);
-        const eyeX = fireCx + Math.cos(angle) * screenDist;
-        const eyeY = fireCy + Math.sin(angle) * screenDist * 0.5;
+        const targetX = fireCx + Math.cos(angle) * screenDist;
+        const targetY = fireCy + Math.sin(angle) * screenDist * 0.5;
+
+        // Lerp toward target position for smooth movement
+        const prev = eyePositionsRef.current.get(creature.id);
+        const lerpSpeed = 0.08;
+        const eyeX = prev ? prev.x + (targetX - prev.x) * lerpSpeed : targetX;
+        const eyeY = prev ? prev.y + (targetY - prev.y) * lerpSpeed : targetY;
+        eyePositionsRef.current.set(creature.id, { x: eyeX, y: eyeY });
 
         if (eyeX < -20 || eyeX > w + 20 || eyeY < 0 || eyeY > h) continue;
 
@@ -273,8 +283,7 @@ export default function GameCanvas({ state }: { state: GameState }) {
         if (blinkCycle > 0.92) continue;
 
         // Alpha — more visible, especially close
-        const baseAlpha = 0.3 + (1 - distRatio) * 0.6;
-        const alpha = baseAlpha;
+        const alpha = 0.3 + (1 - distRatio) * 0.6;
         if (alpha < 0.08) continue;
 
         // Eye glow halo
@@ -314,6 +323,10 @@ export default function GameCanvas({ state }: { state: GameState }) {
         ctx.beginPath();
         ctx.arc(eyeX + gap, eyeY, eyeSize * 0.3, 0, Math.PI * 2);
         ctx.fill();
+      }
+      // Clean up lerp cache for despawned creatures
+      for (const id of eyePositionsRef.current.keys()) {
+        if (!activeIds.has(id)) eyePositionsRef.current.delete(id);
       }
 
       // ── Sound ripples ──
