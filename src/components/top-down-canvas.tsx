@@ -6,7 +6,6 @@ import { type WorldMap, getTile, TILE_SIZE, MAP_WIDTH, MAP_HEIGHT } from "@/lib/
 import { FLASHLIGHT_RANGE, FLASHLIGHT_ANGLE } from "@/lib/exploration-engine";
 import { FIRE_MAX } from "@/lib/constants";
 
-// ── Colors ──
 const GROUND_COLORS = ["#0c0c14", "#0b0b13", "#0d0d15", "#0a0a12"];
 const TREE_COLOR = "#080812";
 const DENSE_TREE = "#050510";
@@ -30,7 +29,6 @@ export default function TopDownCanvas({ state, world }: Props) {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    // Create offscreen canvas for lighting mask
     if (!lightCanvasRef.current) {
       lightCanvasRef.current = document.createElement("canvas");
     }
@@ -48,40 +46,34 @@ export default function TopDownCanvas({ state, world }: Props) {
 
     resize();
     window.addEventListener("resize", resize);
-
     let time = 0;
 
     const draw = () => {
       const rect = canvas.getBoundingClientRect();
       const w = rect.width;
       const h = rect.height;
-
       time += 1;
 
-      // ── Camera follow (lerp) ──
       const cam = cameraRef.current;
       cam.x += (state.playerX - cam.x) * 0.12;
       cam.y += (state.playerY - cam.y) * 0.12;
+      const ox = w / 2 - cam.x;
+      const oy = h / 2 - cam.y;
 
-      const offsetX = w / 2 - cam.x;
-      const offsetY = h / 2 - cam.y;
-
-      // ── Clear ──
       ctx.fillStyle = "#03030a";
       ctx.fillRect(0, 0, w, h);
 
-      // ── Visible tile range ──
-      const tileStartX = Math.max(0, Math.floor((cam.x - w / 2) / TILE_SIZE) - 1);
-      const tileStartY = Math.max(0, Math.floor((cam.y - h / 2) / TILE_SIZE) - 1);
-      const tileEndX = Math.min(MAP_WIDTH, Math.ceil((cam.x + w / 2) / TILE_SIZE) + 1);
-      const tileEndY = Math.min(MAP_HEIGHT, Math.ceil((cam.y + h / 2) / TILE_SIZE) + 1);
+      // ── Tiles ──
+      const tsX = Math.max(0, Math.floor((cam.x - w / 2) / TILE_SIZE) - 1);
+      const tsY = Math.max(0, Math.floor((cam.y - h / 2) / TILE_SIZE) - 1);
+      const teX = Math.min(MAP_WIDTH, Math.ceil((cam.x + w / 2) / TILE_SIZE) + 1);
+      const teY = Math.min(MAP_HEIGHT, Math.ceil((cam.y + h / 2) / TILE_SIZE) + 1);
 
-      // ── Draw tiles ──
-      for (let ty = tileStartY; ty < tileEndY; ty++) {
-        for (let tx = tileStartX; tx < tileEndX; tx++) {
+      for (let ty = tsY; ty < teY; ty++) {
+        for (let tx = tsX; tx < teX; tx++) {
           const tile = getTile(world, tx, ty);
-          const sx = tx * TILE_SIZE + offsetX;
-          const sy = ty * TILE_SIZE + offsetY;
+          const sx = tx * TILE_SIZE + ox;
+          const sy = ty * TILE_SIZE + oy;
 
           if (tile === "ground") {
             ctx.fillStyle = GROUND_COLORS[(tx * 7 + ty * 13) & 3];
@@ -89,10 +81,8 @@ export default function TopDownCanvas({ state, world }: Props) {
           } else if (tile === "tree") {
             ctx.fillStyle = GROUND_COLORS[0];
             ctx.fillRect(sx, sy, TILE_SIZE, TILE_SIZE);
-            // Tree trunk
             ctx.fillStyle = "#0e0e16";
             ctx.fillRect(sx + 13, sy + 18, 6, 14);
-            // Canopy
             ctx.fillStyle = TREE_COLOR;
             ctx.beginPath();
             ctx.arc(sx + 16, sy + 14, 12, 0, Math.PI * 2);
@@ -118,13 +108,12 @@ export default function TopDownCanvas({ state, world }: Props) {
         }
       }
 
-      // ── Resource nodes (small glow markers) ──
+      // ── Resource nodes ──
       for (const node of state.resourceNodes) {
         if (node.depletedUntilTick > state.tick) continue;
-        const nx = node.x + offsetX;
-        const ny = node.y + offsetY;
+        const nx = node.x + ox;
+        const ny = node.y + oy;
         if (nx < -20 || nx > w + 20 || ny < -20 || ny > h + 20) continue;
-
         const colors = { wood: "#4a3a20", food: "#2a3a20", materials: "#2a2a3a" };
         ctx.fillStyle = colors[node.type];
         ctx.beginPath();
@@ -132,136 +121,166 @@ export default function TopDownCanvas({ state, world }: Props) {
         ctx.fill();
       }
 
-      // ── Campfire ──
-      const fireScreenX = state.fireX + offsetX;
-      const fireScreenY = state.fireY + offsetY;
-      const fireIntensity = state.fire / FIRE_MAX;
+      // ── Fires ──
+      for (const fire of state.fires) {
+        const fx = fire.x + ox;
+        const fy = fire.y + oy;
+        const intensity = fire.fuel / FIRE_MAX;
 
-      if (fireIntensity > 0) {
-        // Glow
-        const glowR = 30 + fireIntensity * 80;
-        const glow = ctx.createRadialGradient(fireScreenX, fireScreenY, 0, fireScreenX, fireScreenY, glowR);
-        glow.addColorStop(0, `rgba(255, 140, 50, ${0.15 * fireIntensity})`);
-        glow.addColorStop(0.5, `rgba(255, 80, 20, ${0.06 * fireIntensity})`);
-        glow.addColorStop(1, "rgba(255, 50, 10, 0)");
-        ctx.fillStyle = glow;
-        ctx.fillRect(fireScreenX - glowR, fireScreenY - glowR, glowR * 2, glowR * 2);
+        if (intensity > 0) {
+          const glowR = 25 + intensity * 60;
+          const glow = ctx.createRadialGradient(fx, fy, 0, fx, fy, glowR);
+          glow.addColorStop(0, `rgba(255, 140, 50, ${0.15 * intensity})`);
+          glow.addColorStop(0.5, `rgba(255, 80, 20, ${0.06 * intensity})`);
+          glow.addColorStop(1, "rgba(255, 50, 10, 0)");
+          ctx.fillStyle = glow;
+          ctx.fillRect(fx - glowR, fy - glowR, glowR * 2, glowR * 2);
 
-        // Core
-        const pulse = Math.sin(time * 0.08) * 2;
-        const r = 4 + fireIntensity * 6 + pulse;
-        ctx.fillStyle = `rgba(255, 200, 100, ${0.8 * fireIntensity})`;
-        ctx.beginPath();
-        ctx.arc(fireScreenX, fireScreenY, r, 0, Math.PI * 2);
-        ctx.fill();
-      } else {
-        // Dead fire marker
-        ctx.fillStyle = "#1a1510";
-        ctx.beginPath();
-        ctx.arc(fireScreenX, fireScreenY, 5, 0, Math.PI * 2);
-        ctx.fill();
+          const pulse = Math.sin(time * 0.08 + fire.id) * 2;
+          ctx.fillStyle = `rgba(255, 200, 100, ${0.8 * intensity})`;
+          ctx.beginPath();
+          ctx.arc(fx, fy, 3 + intensity * 5 + pulse, 0, Math.PI * 2);
+          ctx.fill();
+        } else {
+          ctx.fillStyle = "#1a1510";
+          ctx.beginPath();
+          ctx.arc(fx, fy, 4, 0, Math.PI * 2);
+          ctx.fill();
+        }
       }
 
-      // ── Player ──
-      const px = state.playerX + offsetX;
-      const py = state.playerY + offsetY;
+      // ── Player character ──
+      const px = state.playerX + ox;
+      const py = state.playerY + oy;
       const pa = state.playerAngle;
 
+      ctx.save();
+      ctx.translate(px, py);
+      ctx.rotate(pa + Math.PI / 2);
+
       // Body
-      ctx.fillStyle = "#8a9080";
+      ctx.fillStyle = "#6a7a60";
       ctx.beginPath();
-      ctx.arc(px, py, 6, 0, Math.PI * 2);
+      ctx.ellipse(0, 0, 5, 7, 0, 0, Math.PI * 2);
       ctx.fill();
 
-      // Direction indicator
-      ctx.fillStyle = "#b0b8a0";
+      // Head
+      ctx.fillStyle = "#8a9a80";
       ctx.beginPath();
-      ctx.moveTo(px + Math.cos(pa) * 10, py + Math.sin(pa) * 10);
-      ctx.lineTo(px + Math.cos(pa + 2.4) * 5, py + Math.sin(pa + 2.4) * 5);
-      ctx.lineTo(px + Math.cos(pa - 2.4) * 5, py + Math.sin(pa - 2.4) * 5);
-      ctx.closePath();
+      ctx.arc(0, -6, 3.5, 0, Math.PI * 2);
       ctx.fill();
 
-      // ── Darkness mask with flashlight + fire cutouts ──
+      // Arms
+      ctx.strokeStyle = "#6a7a60";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(-4, -2);
+      ctx.lineTo(-7, 3);
+      ctx.moveTo(4, -2);
+      ctx.lineTo(7, 3);
+      ctx.stroke();
+
+      // Weapon indicator at front
+      const weaponColors = { knife: "#aaa", spear: "#c8a060", axe: "#b06040" };
+      ctx.fillStyle = weaponColors[state.weapon];
+      if (state.weapon === "knife") {
+        ctx.fillRect(-0.5, -11, 1, 4);
+      } else if (state.weapon === "spear") {
+        ctx.fillRect(-0.5, -14, 1, 7);
+        ctx.fillStyle = "#ccc";
+        ctx.beginPath();
+        ctx.moveTo(0, -15);
+        ctx.lineTo(-1.5, -12);
+        ctx.lineTo(1.5, -12);
+        ctx.closePath();
+        ctx.fill();
+      } else {
+        ctx.fillRect(-0.5, -12, 1, 5);
+        ctx.fillStyle = "#888";
+        ctx.fillRect(-3, -13, 6, 2);
+      }
+
+      ctx.restore();
+
+      // ── Darkness mask ──
       const dpr = window.devicePixelRatio || 1;
       const lctx = lightCanvas.getContext("2d")!;
       lctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      lctx.fillStyle = "rgba(0, 0, 0, 0.94)";
+      lctx.fillStyle = "rgba(0, 0, 0, 0.96)";
       lctx.fillRect(0, 0, w, h);
       lctx.globalCompositeOperation = "destination-out";
 
-      // Flashlight cone
-      const flGrad = lctx.createRadialGradient(px, py, 0, px, py, FLASHLIGHT_RANGE);
-      flGrad.addColorStop(0, "rgba(255,255,255,0.95)");
-      flGrad.addColorStop(0.7, "rgba(255,255,255,0.4)");
-      flGrad.addColorStop(1, "rgba(255,255,255,0)");
-      lctx.fillStyle = flGrad;
-      lctx.beginPath();
-      lctx.moveTo(px, py);
-      lctx.arc(px, py, FLASHLIGHT_RANGE, pa - FLASHLIGHT_ANGLE, pa + FLASHLIGHT_ANGLE);
-      lctx.closePath();
-      lctx.fill();
+      // Flashlight
+      if (state.flashlightOn && state.flashlightBattery > 0) {
+        const batteryFactor = Math.min(1, state.flashlightBattery / 20); // dims below 20%
+        const flRange = FLASHLIGHT_RANGE * (0.5 + batteryFactor * 0.5);
+        const flicker = state.flashlightBattery < 15 ? Math.random() * 0.3 : 0;
+        const flGrad = lctx.createRadialGradient(px, py, 0, px, py, flRange);
+        flGrad.addColorStop(0, `rgba(255,255,255,${(0.95 - flicker) * batteryFactor})`);
+        flGrad.addColorStop(0.7, `rgba(255,255,255,${0.4 * batteryFactor})`);
+        flGrad.addColorStop(1, "rgba(255,255,255,0)");
+        lctx.fillStyle = flGrad;
+        lctx.beginPath();
+        lctx.moveTo(px, py);
+        lctx.arc(px, py, flRange, pa - FLASHLIGHT_ANGLE, pa + FLASHLIGHT_ANGLE);
+        lctx.closePath();
+        lctx.fill();
+      }
 
-      // Small ambient glow around player (can see immediately around you)
-      const ambGrad = lctx.createRadialGradient(px, py, 0, px, py, 35);
-      ambGrad.addColorStop(0, "rgba(255,255,255,0.5)");
+      // Tiny ambient glow (always — you can barely see your feet)
+      const ambGrad = lctx.createRadialGradient(px, py, 0, px, py, 20);
+      ambGrad.addColorStop(0, "rgba(255,255,255,0.25)");
       ambGrad.addColorStop(1, "rgba(255,255,255,0)");
       lctx.fillStyle = ambGrad;
       lctx.beginPath();
-      lctx.arc(px, py, 35, 0, Math.PI * 2);
+      lctx.arc(px, py, 20, 0, Math.PI * 2);
       lctx.fill();
 
-      // Fire light
-      if (fireIntensity > 0) {
-        const fireR = 40 + fireIntensity * 120;
-        const fireGrad = lctx.createRadialGradient(fireScreenX, fireScreenY, 0, fireScreenX, fireScreenY, fireR);
-        fireGrad.addColorStop(0, `rgba(255,255,255,${0.8 * fireIntensity})`);
-        fireGrad.addColorStop(0.5, `rgba(255,255,255,${0.3 * fireIntensity})`);
-        fireGrad.addColorStop(1, "rgba(255,255,255,0)");
-        lctx.fillStyle = fireGrad;
+      // Fire lights
+      for (const fire of state.fires) {
+        if (fire.fuel <= 0) continue;
+        const ffx = fire.x + ox;
+        const ffy = fire.y + oy;
+        const fi = fire.fuel / FIRE_MAX;
+        const fireR = 35 + fi * 100;
+        const fGrad = lctx.createRadialGradient(ffx, ffy, 0, ffx, ffy, fireR);
+        fGrad.addColorStop(0, `rgba(255,255,255,${0.8 * fi})`);
+        fGrad.addColorStop(0.5, `rgba(255,255,255,${0.3 * fi})`);
+        fGrad.addColorStop(1, "rgba(255,255,255,0)");
+        lctx.fillStyle = fGrad;
         lctx.beginPath();
-        lctx.arc(fireScreenX, fireScreenY, fireR, 0, Math.PI * 2);
+        lctx.arc(ffx, ffy, fireR, 0, Math.PI * 2);
         lctx.fill();
       }
 
       lctx.globalCompositeOperation = "source-over";
-
-      // Apply darkness
       ctx.drawImage(lightCanvas, 0, 0, w, h);
 
-      // ── Creature eyes ON TOP of darkness (they glow through) ──
+      // ── Creature eyes (on top of darkness) ──
       const activeIds = new Set<number>();
       for (const c of state.creatures) {
         activeIds.add(c.id);
-        const cx = c.x + offsetX;
-        const cy = c.y + offsetY;
+        const cx = c.x + ox;
+        const cy = c.y + oy;
         if (cx < -30 || cx > w + 30 || cy < -30 || cy > h + 30) continue;
 
-        // Lerp eye positions
         const prev = eyePositionsRef.current.get(c.id);
-        const lerpSpeed = 0.1;
-        const ex = prev ? prev.x + (cx - prev.x) * lerpSpeed : cx;
-        const ey = prev ? prev.y + (cy - prev.y) * lerpSpeed : cy;
+        const ex = prev ? prev.x + (cx - prev.x) * 0.1 : cx;
+        const ey = prev ? prev.y + (cy - prev.y) * 0.1 : cy;
         eyePositionsRef.current.set(c.id, { x: ex, y: ey });
 
         const d = Math.sqrt((c.x - state.playerX) ** 2 + (c.y - state.playerY) ** 2);
-        const distRatio = Math.min(1, d / 500);
-
-        // Blink
+        const dr = Math.min(1, d / 500);
         if (Math.sin(time * 0.025 + c.id * 7.3) > 0.92) continue;
-
-        const alpha = 0.3 + (1 - distRatio) * 0.6;
+        const alpha = 0.3 + (1 - dr) * 0.6;
         if (alpha < 0.05) continue;
 
-        const eyeColors: Record<string, [number, number, number]> = {
-          timid: [160, 200, 100],
-          predator: [240, 130, 30],
-          stalker: [180, 100, 220],
+        const ec: Record<string, [number, number, number]> = {
+          timid: [160, 200, 100], predator: [240, 130, 30], stalker: [180, 100, 220],
         };
-        const [er, eg, eb] = eyeColors[c.type] || [200, 180, 50];
+        const [er, eg, eb] = ec[c.type] || [200, 180, 50];
 
-        // Glow halo
-        const haloR = 5 + (1 - distRatio) * 6;
+        const haloR = 5 + (1 - dr) * 6;
         const halo = ctx.createRadialGradient(ex, ey, 0, ex, ey, haloR);
         halo.addColorStop(0, `rgba(${er},${eg},${eb},${alpha * 0.2})`);
         halo.addColorStop(1, `rgba(${er},${eg},${eb},0)`);
@@ -270,15 +289,13 @@ export default function TopDownCanvas({ state, world }: Props) {
         ctx.arc(ex, ey, haloR, 0, Math.PI * 2);
         ctx.fill();
 
-        // Eyes
-        const sz = 1.5 + (1 - distRatio) * 1.5;
-        const gap = 3;
+        const sz = 1.5 + (1 - dr) * 1.5;
         ctx.fillStyle = `rgba(${er},${eg},${eb},${alpha})`;
         ctx.beginPath();
-        ctx.ellipse(ex - gap, ey, sz, sz * 0.65, 0, 0, Math.PI * 2);
+        ctx.ellipse(ex - 3, ey, sz, sz * 0.65, 0, 0, Math.PI * 2);
         ctx.fill();
         ctx.beginPath();
-        ctx.ellipse(ex + gap, ey, sz, sz * 0.65, 0, 0, Math.PI * 2);
+        ctx.ellipse(ex + 3, ey, sz, sz * 0.65, 0, 0, Math.PI * 2);
         ctx.fill();
       }
       for (const id of eyePositionsRef.current.keys()) {
@@ -286,7 +303,6 @@ export default function TopDownCanvas({ state, world }: Props) {
       }
 
       // ── Noise ripple ──
-      // (simple ring expanding from player when noise is high)
       if (state.noise > 20) {
         const rippleR = 20 + (state.noise / 100) * 40 + Math.sin(time * 0.15) * 5;
         ctx.strokeStyle = `rgba(201, 160, 212, ${(state.noise / 100) * 0.15})`;

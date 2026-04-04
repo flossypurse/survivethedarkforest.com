@@ -147,8 +147,9 @@ export function clearState(): void {
 
 const MAX_LOG_ENTRIES = 50;
 
+// Accepts any object with tick, hour, log fields (GameState or ExplorationState)
 export function addLog(
-  state: GameState,
+  state: { tick: number; hour: number; log: LogEntry[] },
   message: string,
   type: LogEntry["type"] = "info"
 ): void {

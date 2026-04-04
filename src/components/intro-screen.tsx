@@ -15,7 +15,7 @@ const STORY_LINES = [
   { text: "IMPACT — EJECTING", delay: 200, pause: 1000, style: "warning" },
   { text: "", delay: 0, pause: 600 },
   { text: "The canopy blew off. The seat fired.", delay: 0, pause: 1500 },
-  { text: "Your F-16 became a fireball. The only light for miles.", delay: 200, pause: 2000 },
+  { text: "Your fighter became a fireball. The only light for miles.", delay: 200, pause: 2000 },
   { text: "", delay: 0, pause: 400 },
   { text: "The parachute opened.", delay: 0, pause: 1200 },
   { text: "Below: nothing but black. An alien darkness that swallowed the world.", delay: 200, pause: 2200 },
@@ -35,7 +35,7 @@ const STORY_LINES = [
   { text: "", delay: 0, pause: 600 },
   { text: "Your emergency beacon is transmitting. Rescue ETA: 48 hours.", delay: 0, pause: 2500 },
   { text: "", delay: 0, pause: 400 },
-  { text: "Move carefully. Stay quiet. Use your flashlight.", delay: 0, pause: 2000, style: "hint" },
+  { text: "F to toggle flashlight. Battery won't last. Use your lighter to start fires.", delay: 0, pause: 2000, style: "hint" },
   { text: "Survive the dark forest.", delay: 200, pause: 2500 },
 ];
 

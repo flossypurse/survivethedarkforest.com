@@ -4,17 +4,13 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import {
   type ExplorationState,
   createExplorationState,
-  getWorldFromState,
 } from "@/lib/exploration-state";
 import {
-  movePlayer,
-  explorationTick,
-  INTERACT_RANGE,
-  RESOURCE_RESPAWN_TICKS,
+  movePlayer, explorationTick, INTERACT_RANGE, RESOURCE_RESPAWN_TICKS,
+  toggleFlashlight, startFire, stokeFire, attackCreature, craftWeapon, hasLight,
 } from "@/lib/exploration-engine";
-import { addWoodToFire, eat, buildClub, buildTrap, buildShelter, relightFire } from "@/lib/game-engine";
 import { type WorldMap, generateWorld } from "@/lib/world-gen";
-import { TICK_MS, FORAGE_COOLDOWN_TICKS, NOISE_FORAGE, NOISE_MAX } from "@/lib/constants";
+import { TICK_MS, FORAGE_COOLDOWN_TICKS, NOISE_FORAGE, NOISE_MAX, NOISE_EAT } from "@/lib/constants";
 import { addLog } from "@/lib/game-state";
 import TopDownCanvas from "./top-down-canvas";
 import ExplorationHUD from "./exploration-hud";
@@ -23,14 +19,6 @@ import IntroScreen from "./intro-screen";
 
 function dist(x1: number, y1: number, x2: number, y2: number) {
   return Math.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2);
-}
-
-function seededRandom(tick: number, salt: number = 0): number {
-  let h = (tick + salt * 374761393) | 0;
-  h = Math.imul(h ^ (h >>> 16), 0x85ebca6b);
-  h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35);
-  h = h ^ (h >>> 16);
-  return (h >>> 0) / 0x100000000;
 }
 
 export default function ExplorationScreen() {
@@ -46,51 +34,38 @@ export default function ExplorationScreen() {
 
   useEffect(() => { stateRef.current = state; }, [state]);
   useEffect(() => { worldRef.current = world; }, [world]);
+  useEffect(() => { setIsMobile(window.matchMedia("(pointer: coarse)").matches); }, []);
 
-  // Detect mobile
-  useEffect(() => {
-    setIsMobile(window.matchMedia("(pointer: coarse)").matches);
-  }, []);
-
-  // ── Intro complete → create game ──
   const handleIntroComplete = useCallback(() => {
     setShowIntro(false);
     const s = createExplorationState();
-    const w = generateWorld(s.worldSeed);
     setState(s);
-    setWorld(w);
+    setWorld(generateWorld(s.worldSeed));
   }, []);
 
-  // ── Keyboard input ──
+  // ── Keyboard ──
   useEffect(() => {
     const onDown = (e: KeyboardEvent) => {
-      keysRef.current.add(e.key.toLowerCase());
-      if (e.key.toLowerCase() === "e" || e.key === " ") {
-        handleInteract();
-      }
+      const k = e.key.toLowerCase();
+      keysRef.current.add(k);
+      if (k === "e" || e.key === " ") handleInteract();
+      if (k === "q") handleAttack();
+      if (k === "f") handleToggleFlashlight();
     };
     const onUp = (e: KeyboardEvent) => keysRef.current.delete(e.key.toLowerCase());
     window.addEventListener("keydown", onDown);
     window.addEventListener("keyup", onUp);
-    return () => {
-      window.removeEventListener("keydown", onDown);
-      window.removeEventListener("keyup", onUp);
-    };
+    return () => { window.removeEventListener("keydown", onDown); window.removeEventListener("keyup", onUp); };
   }, []);
 
-  // ── Frame loop (60fps): player movement ──
+  // ── Frame loop ──
   useEffect(() => {
     if (showIntro || !state) return;
-
     const frame = () => {
       const s = stateRef.current;
       const w = worldRef.current;
-      if (!s || !w || s.status !== "playing") {
-        frameId = requestAnimationFrame(frame);
-        return;
-      }
+      if (!s || !w || s.status !== "playing") { frameId = requestAnimationFrame(frame); return; }
 
-      // Input
       let dx = 0, dy = 0;
       const keys = keysRef.current;
       if (keys.has("w") || keys.has("arrowup")) dy -= 1;
@@ -98,79 +73,85 @@ export default function ExplorationScreen() {
       if (keys.has("a") || keys.has("arrowleft")) dx -= 1;
       if (keys.has("d") || keys.has("arrowright")) dx += 1;
 
-      // Joystick overrides keyboard if active
       const joy = joystickRef.current;
-      if (Math.abs(joy.dx) > 0.1 || Math.abs(joy.dy) > 0.1) {
-        dx = joy.dx;
-        dy = joy.dy;
-      }
+      if (Math.abs(joy.dx) > 0.1 || Math.abs(joy.dy) > 0.1) { dx = joy.dx; dy = joy.dy; }
 
       if (dx !== 0 || dy !== 0) {
-        const running = keys.has("shift");
-        setState(prev => prev ? movePlayer(prev, dx, dy, running, w) : prev);
+        setState(prev => prev ? movePlayer(prev, dx, dy, keys.has("shift"), w) : prev);
       }
-
       frameId = requestAnimationFrame(frame);
     };
-
     let frameId = requestAnimationFrame(frame);
     return () => cancelAnimationFrame(frameId);
   }, [showIntro, state]);
 
-  // ── Tick loop (1s): game simulation ──
+  // ── Tick loop ──
   useEffect(() => {
     if (showIntro || !state) return;
     const interval = setInterval(() => {
-      setState(prev => {
-        if (!prev || prev.status !== "playing") return prev;
-        return explorationTick(prev);
-      });
+      setState(prev => prev && prev.status === "playing" ? explorationTick(prev) : prev);
     }, TICK_MS);
     return () => clearInterval(interval);
   }, [showIntro, state]);
 
-  // ── Joystick handler ──
-  const handleJoystick = useCallback((dx: number, dy: number) => {
-    joystickRef.current = { dx, dy };
+  const handleJoystick = useCallback((dx: number, dy: number) => { joystickRef.current = { dx, dy }; }, []);
+
+  const handleToggleFlashlight = useCallback(() => {
+    setState(prev => prev ? toggleFlashlight(prev) : prev);
   }, []);
 
-  // ── Interact (E key or button) ──
+  const handleAttack = useCallback(() => {
+    setState(prev => prev ? attackCreature(prev) : prev);
+  }, []);
+
+  const handleStartFire = useCallback(() => {
+    setState(prev => prev ? startFire(prev) : prev);
+  }, []);
+
+  const handleCraftWeapon = useCallback((tier: "spear" | "axe") => {
+    setState(prev => prev ? craftWeapon(prev, tier) : prev);
+  }, []);
+
   const handleInteract = useCallback(() => {
     setState(prev => {
       if (!prev || prev.status !== "playing") return prev;
-      const pX = prev.playerX;
-      const pY = prev.playerY;
+      const { playerX: pX, playerY: pY } = prev;
 
-      // Near fire?
-      if (dist(pX, pY, prev.fireX, prev.fireY) < INTERACT_RANGE) {
-        // Priority: relight > stoke > eat
-        if (prev.fire <= 0 && prev.wood >= 2) return relightFire(prev as any) as any;
-        if (prev.fire > 0 && prev.wood > 0) return addWoodToFire(prev as any) as any;
-        if (prev.food > 0 && prev.hunger > 20) return eat(prev as any) as any;
+      // Near a fire? Stoke or eat
+      for (const fire of prev.fires) {
+        if (dist(pX, pY, fire.x, fire.y) < INTERACT_RANGE) {
+          if (fire.fuel > 0 && prev.wood > 0) return stokeFire(prev, fire.id);
+          if (prev.food > 0 && prev.hunger > 20) {
+            const s = { ...prev };
+            s.food -= 1;
+            s.hunger = Math.max(0, s.hunger - 15);
+            s.health = Math.min(100, s.health + 1);
+            s.noise = Math.min(NOISE_MAX, s.noise + NOISE_EAT);
+            addLog(s, "You eat.", "info");
+            return s;
+          }
+        }
       }
 
-      // Near resource node?
-      if (prev.tick >= prev.forageCooldownUntil) {
+      // No fire nearby? Start one
+      if (prev.lighterUses > 0 && prev.wood >= 2) {
+        const nearExisting = prev.fires.some(f => dist(pX, pY, f.x, f.y) < INTERACT_RANGE);
+        if (!nearExisting) return startFire(prev);
+      }
+
+      // Near resource?
+      if (prev.tick >= prev.forageCooldownUntil && hasLight(prev)) {
         for (let i = 0; i < prev.resourceNodes.length; i++) {
           const node = prev.resourceNodes[i];
           if (node.depletedUntilTick > prev.tick) continue;
           if (dist(pX, pY, node.x, node.y) < INTERACT_RANGE) {
-            // Forage this node
             const s = { ...prev, resourceNodes: [...prev.resourceNodes] };
             s.forageCooldownUntil = s.tick + FORAGE_COOLDOWN_TICKS;
             s.noise = Math.min(NOISE_MAX, s.noise + NOISE_FORAGE);
             s.resourceNodes[i] = { ...node, depletedUntilTick: s.tick + RESOURCE_RESPAWN_TICKS };
-
-            if (node.type === "wood") {
-              s.wood += 2;
-              addLog(s, "You gather wood.", "info");
-            } else if (node.type === "food") {
-              s.food += 1;
-              addLog(s, "You find some food.", "info");
-            } else {
-              s.materials += 2;
-              addLog(s, "You find materials.", "discovery");
-            }
+            if (node.type === "wood") { s.wood += 2; addLog(s, "You gather wood.", "info"); }
+            else if (node.type === "food") { s.food += 1; addLog(s, "You find food.", "info"); }
+            else { s.materials += 2; addLog(s, "You find materials.", "discovery"); }
             return s;
           }
         }
@@ -180,17 +161,13 @@ export default function ExplorationScreen() {
     });
   }, []);
 
-  // ── Restart ──
   const handleRestart = useCallback(() => {
     setShowIntro(true);
     setState(null);
     setWorld(null);
   }, []);
 
-  // ── Intro ──
-  if (showIntro) {
-    return <IntroScreen onComplete={handleIntroComplete} />;
-  }
+  if (showIntro) return <IntroScreen onComplete={handleIntroComplete} />;
 
   if (!state || !world) {
     return (
@@ -201,15 +178,18 @@ export default function ExplorationScreen() {
     );
   }
 
-  // Proximity checks for HUD
-  const nearFire = dist(state.playerX, state.playerY, state.fireX, state.fireY) < INTERACT_RANGE;
+  const nearFire = (() => {
+    for (const f of state.fires) {
+      if (dist(state.playerX, state.playerY, f.x, f.y) < INTERACT_RANGE) return { id: f.id, fuel: f.fuel };
+    }
+    return null;
+  })();
+
   const nearResource = (() => {
-    if (state.tick < state.forageCooldownUntil) return null;
+    if (state.tick < state.forageCooldownUntil || !hasLight(state)) return null;
     for (const node of state.resourceNodes) {
       if (node.depletedUntilTick > state.tick) continue;
-      if (dist(state.playerX, state.playerY, node.x, node.y) < INTERACT_RANGE) {
-        return { type: node.type };
-      }
+      if (dist(state.playerX, state.playerY, node.x, node.y) < INTERACT_RANGE) return { type: node.type };
     }
     return null;
   })();
@@ -222,6 +202,10 @@ export default function ExplorationScreen() {
         nearFire={nearFire}
         nearResource={nearResource}
         onInteract={handleInteract}
+        onAttack={handleAttack}
+        onToggleFlashlight={handleToggleFlashlight}
+        onStartFire={handleStartFire}
+        onCraftWeapon={handleCraftWeapon}
         onRestart={handleRestart}
       />
       {isMobile && <VirtualJoystick onMove={handleJoystick} />}
