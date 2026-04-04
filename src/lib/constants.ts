@@ -56,8 +56,11 @@ export const DETECT_CLOSE_RANGE = 25; // precise 8-direction
 export const DETECT_MEDIUM_RANGE = 50; // vague 4-direction
 export const DETECT_COOLDOWN = 12; // ticks between detection log messages
 
+// ── World ──
+export { TILE_SIZE } from "./world-gen";
+
 // ── Storage key ──
-export const STORAGE_KEY = "dark-forest-state-v2";
+export const STORAGE_KEY = "dark-forest-state-v3";
 
 // ── Config object (for simulation harness + future difficulty levels) ──
 

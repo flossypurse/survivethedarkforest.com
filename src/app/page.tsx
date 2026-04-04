@@ -1,5 +1,5 @@
-import GameScreen from "@/components/game-screen";
+import ExplorationScreen from "@/components/exploration-screen";
 
 export default function Home() {
-  return <GameScreen />;
+  return <ExplorationScreen />;
 }
