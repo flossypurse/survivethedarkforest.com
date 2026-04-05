@@ -17,8 +17,9 @@ import ExplorationHUD from "./exploration-hud";
 import VirtualJoystick from "./virtual-joystick";
 import IntroScreen from "./intro-screen";
 import ModeSelect from "./mode-select";
+import FactionSelect, { type Faction } from "./faction-select";
 
-type Screen = "intro" | "mode-select" | "solo" | "multiplayer";
+type Screen = "mode-select" | "faction-select" | "intro" | "solo" | "multiplayer";
 
 function dist(x1: number, y1: number, x2: number, y2: number) {
   return Math.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2);
@@ -27,7 +28,8 @@ function dist(x1: number, y1: number, x2: number, y2: number) {
 export default function ExplorationScreen() {
   const [state, setState] = useState<ExplorationState | null>(null);
   const [world, setWorld] = useState<WorldMap | null>(null);
-  const [screen, setScreen] = useState<Screen>("intro");
+  const [screen, setScreen] = useState<Screen>("mode-select");
+  const [faction, setFaction] = useState<Faction>("pilot");
   const [isMobile, setIsMobile] = useState(false);
 
   const stateRef = useRef<ExplorationState | null>(null);
@@ -39,20 +41,27 @@ export default function ExplorationScreen() {
   useEffect(() => { worldRef.current = world; }, [world]);
   useEffect(() => { setIsMobile(window.matchMedia("(pointer: coarse)").matches); }, []);
 
-  const handleIntroComplete = useCallback(() => {
-    setScreen("mode-select");
+  // Mode select → faction select (solo) or multiplayer
+  const handleSelectSolo = useCallback(() => {
+    setScreen("faction-select");
   }, []);
 
-  const handleSelectSolo = useCallback(() => {
+  const handleSelectMultiplayer = useCallback(() => {
+    setScreen("multiplayer");
+  }, []);
+
+  // Faction select → intro
+  const handleFactionSelect = useCallback((f: Faction) => {
+    setFaction(f);
+    setScreen("intro");
+  }, []);
+
+  // Intro complete → start game
+  const handleIntroComplete = useCallback(() => {
     setScreen("solo");
     const s = createExplorationState();
     setState(s);
     setWorld(generateWorld(s.worldSeed));
-  }, []);
-
-  const handleSelectMultiplayer = useCallback(() => {
-    // TODO: connect to server, join lobby
-    setScreen("multiplayer");
   }, []);
 
   // ── Keyboard ──
@@ -179,8 +188,9 @@ export default function ExplorationScreen() {
     setWorld(null);
   }, []);
 
-  if (screen === "intro") return <IntroScreen onComplete={handleIntroComplete} />;
   if (screen === "mode-select") return <ModeSelect onSelectSolo={handleSelectSolo} onSelectMultiplayer={handleSelectMultiplayer} />;
+  if (screen === "faction-select") return <FactionSelect onSelect={handleFactionSelect} onBack={() => setScreen("mode-select")} />;
+  if (screen === "intro") return <IntroScreen faction={faction} onComplete={handleIntroComplete} />;
   if (screen === "multiplayer") {
     return (
       <div className="h-screen w-screen flex flex-col items-center justify-center"

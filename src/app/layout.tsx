@@ -9,11 +9,11 @@ const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"]
 export const metadata: Metadata = {
   title: "Survive the Dark Forest",
   description:
-    "A persistent survival game. Keep the fire alive. The forest doesn't sleep — even when you do.",
+    "They darkened the sky. You fell from it. A top-down survival horror game — manage noise, light, and trust.",
   openGraph: {
     type: "website",
     title: "Survive the Dark Forest",
-    description: "Keep the fire alive. The forest doesn't sleep.",
+    description: "They darkened the sky. You fell from it.",
   },
 };
 

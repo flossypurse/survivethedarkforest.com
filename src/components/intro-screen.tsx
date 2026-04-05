@@ -1,8 +1,11 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import type { Faction } from "./faction-select";
 
-const STORY_LINES = [
+type StoryLine = { text: string; delay: number; pause: number; style?: string };
+
+const PILOT_LINES: StoryLine[] = [
   { text: "", delay: 800, pause: 400 },
   { text: "CONTACT — MULTIPLE BOGEYS", delay: 0, pause: 1000, style: "warning" },
   { text: "WEAPONS FREE", delay: 200, pause: 800, style: "warning" },
@@ -39,7 +42,35 @@ const STORY_LINES = [
   { text: "Survive the dark forest.", delay: 200, pause: 2500 },
 ];
 
-export default function IntroScreen({ onComplete }: { onComplete: () => void }) {
+const ALIEN_LINES: StoryLine[] = [
+  { text: "", delay: 800, pause: 400 },
+  { text: "SIGNAL DETECTED — SECTOR 7", delay: 0, pause: 1000, style: "warning" },
+  { text: "DEPLOY HUNTER UNIT", delay: 200, pause: 800, style: "warning" },
+  { text: "", delay: 0, pause: 600 },
+  { text: "You dropped through the field. The darkness parted for you — it is yours.", delay: 0, pause: 2200 },
+  { text: "The impact scattered the pod. You absorbed the wreckage. Adapted.", delay: 200, pause: 2200 },
+  { text: "", delay: 0, pause: 400 },
+  { text: "HOSTILES DETECTED IN SECTOR", delay: 0, pause: 800, style: "warning" },
+  { text: "MIMIC PROTOCOL ACTIVE", delay: 200, pause: 1000, style: "warning" },
+  { text: "", delay: 0, pause: 600 },
+  { text: "You feel them. Scattered through the trees. Warm. Loud. Afraid.", delay: 0, pause: 2500 },
+  { text: "Their fires are beacons. Their noise is invitation.", delay: 200, pause: 2200 },
+  { text: "", delay: 0, pause: 800 },
+  { text: "...", delay: 0, pause: 1500 },
+  { text: "", delay: 0, pause: 400 },
+  { text: "You look at your hands. Almost human. Close enough.", delay: 0, pause: 2200 },
+  { text: "You can wear their shape. Move like them. Speak like them.", delay: 200, pause: 2500 },
+  { text: "But you are not one of them.", delay: 200, pause: 2000, style: "danger" },
+  { text: "", delay: 0, pause: 600 },
+  { text: "The darkness is yours. You see without light.", delay: 0, pause: 2000 },
+  { text: "Fire weakens you. Stay in the shadows.", delay: 200, pause: 2000, style: "hint" },
+  { text: "", delay: 0, pause: 400 },
+  { text: "Hunt them before rescue arrives. 48 hours.", delay: 0, pause: 2500 },
+  { text: "Consume to evolve. Leave no survivors.", delay: 200, pause: 2500, style: "danger" },
+];
+
+export default function IntroScreen({ faction = "pilot", onComplete }: { faction?: Faction; onComplete: () => void }) {
+  const STORY_LINES = faction === "alien" ? ALIEN_LINES : PILOT_LINES;
   const [visibleLines, setVisibleLines] = useState<number>(0);
   const [showSkip, setShowSkip] = useState(false);
   const [fadeOut, setFadeOut] = useState(false);
