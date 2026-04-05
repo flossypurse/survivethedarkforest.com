@@ -16,6 +16,9 @@ import TopDownCanvas from "./top-down-canvas";
 import ExplorationHUD from "./exploration-hud";
 import VirtualJoystick from "./virtual-joystick";
 import IntroScreen from "./intro-screen";
+import ModeSelect from "./mode-select";
+
+type Screen = "intro" | "mode-select" | "solo" | "multiplayer";
 
 function dist(x1: number, y1: number, x2: number, y2: number) {
   return Math.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2);
@@ -24,7 +27,7 @@ function dist(x1: number, y1: number, x2: number, y2: number) {
 export default function ExplorationScreen() {
   const [state, setState] = useState<ExplorationState | null>(null);
   const [world, setWorld] = useState<WorldMap | null>(null);
-  const [showIntro, setShowIntro] = useState(true);
+  const [screen, setScreen] = useState<Screen>("intro");
   const [isMobile, setIsMobile] = useState(false);
 
   const stateRef = useRef<ExplorationState | null>(null);
@@ -37,10 +40,19 @@ export default function ExplorationScreen() {
   useEffect(() => { setIsMobile(window.matchMedia("(pointer: coarse)").matches); }, []);
 
   const handleIntroComplete = useCallback(() => {
-    setShowIntro(false);
+    setScreen("mode-select");
+  }, []);
+
+  const handleSelectSolo = useCallback(() => {
+    setScreen("solo");
     const s = createExplorationState();
     setState(s);
     setWorld(generateWorld(s.worldSeed));
+  }, []);
+
+  const handleSelectMultiplayer = useCallback(() => {
+    // TODO: connect to server, join lobby
+    setScreen("multiplayer");
   }, []);
 
   // ── Keyboard ──
@@ -60,7 +72,7 @@ export default function ExplorationScreen() {
 
   // ── Frame loop ──
   useEffect(() => {
-    if (showIntro || !state) return;
+    if (screen !== "solo" || !state) return;
     const frame = () => {
       const s = stateRef.current;
       const w = worldRef.current;
@@ -83,16 +95,16 @@ export default function ExplorationScreen() {
     };
     let frameId = requestAnimationFrame(frame);
     return () => cancelAnimationFrame(frameId);
-  }, [showIntro, state]);
+  }, [screen, state]);
 
   // ── Tick loop ──
   useEffect(() => {
-    if (showIntro || !state) return;
+    if (screen !== "solo" || !state) return;
     const interval = setInterval(() => {
       setState(prev => prev && prev.status === "playing" ? explorationTick(prev) : prev);
     }, TICK_MS);
     return () => clearInterval(interval);
-  }, [showIntro, state]);
+  }, [screen, state]);
 
   const handleJoystick = useCallback((dx: number, dy: number) => { joystickRef.current = { dx, dy }; }, []);
 
@@ -162,12 +174,25 @@ export default function ExplorationScreen() {
   }, []);
 
   const handleRestart = useCallback(() => {
-    setShowIntro(true);
+    setScreen("mode-select");
     setState(null);
     setWorld(null);
   }, []);
 
-  if (showIntro) return <IntroScreen onComplete={handleIntroComplete} />;
+  if (screen === "intro") return <IntroScreen onComplete={handleIntroComplete} />;
+  if (screen === "mode-select") return <ModeSelect onSelectSolo={handleSelectSolo} onSelectMultiplayer={handleSelectMultiplayer} />;
+  if (screen === "multiplayer") {
+    return (
+      <div className="h-screen w-screen flex flex-col items-center justify-center"
+        style={{ background: "#02020a", color: "#6b7280", gap: "16px" }}>
+        <div className="text-sm">Multiplayer coming soon.</div>
+        <button onClick={() => setScreen("mode-select")} className="cursor-pointer"
+          style={{ padding: "10px 20px", borderRadius: "8px", background: "rgba(20,20,15,0.6)", color: "#6b7280", border: "1px solid rgba(100,100,90,0.2)", fontSize: "0.8rem" }}>
+          Back
+        </button>
+      </div>
+    );
+  }
 
   if (!state || !world) {
     return (
