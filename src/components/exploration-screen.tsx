@@ -12,6 +12,11 @@ import {
 import { type WorldMap, generateWorld } from "@/lib/world-gen";
 import { TICK_MS, FORAGE_COOLDOWN_TICKS, NOISE_FORAGE, NOISE_MAX, NOISE_EAT } from "@/lib/constants";
 import { addLog } from "@/lib/game-state";
+import {
+  initAudio, resumeAudio, playFootstep, playForage, playFlashlightClick,
+  playWeaponHit, playLighterFlick, playDamageTaken, playCreatureSound,
+  updateHeartbeat, updateFireCrackle, startAmbientWind, cleanupAudio,
+} from "@/lib/audio-engine";
 import TopDownCanvas from "./top-down-canvas";
 import ExplorationHUD from "./exploration-hud";
 import VirtualJoystick from "./virtual-joystick";
@@ -40,6 +45,65 @@ export default function ExplorationScreen() {
   useEffect(() => { stateRef.current = state; }, [state]);
   useEffect(() => { worldRef.current = world; }, [world]);
   useEffect(() => { setIsMobile(window.matchMedia("(pointer: coarse)").matches); }, []);
+
+  // Audio init on first user interaction
+  useEffect(() => {
+    const onInteraction = () => {
+      initAudio();
+      resumeAudio();
+      startAmbientWind();
+    };
+    window.addEventListener("click", onInteraction, { once: true });
+    window.addEventListener("keydown", onInteraction, { once: true });
+    return () => {
+      window.removeEventListener("click", onInteraction);
+      window.removeEventListener("keydown", onInteraction);
+      cleanupAudio();
+    };
+  }, []);
+
+  // Audio: heartbeat + fire crackle tied to game state
+  const prevHealthRef = useRef(100);
+  const footstepCooldownRef = useRef(0);
+  useEffect(() => {
+    if (!state || state.status !== "playing") {
+      updateHeartbeat(0);
+      updateFireCrackle(0, 999);
+      return;
+    }
+    // Heartbeat based on health + creature proximity
+    const nearestCreatureDist = state.creatures.length > 0
+      ? Math.min(...state.creatures.map(c => Math.sqrt((c.x - state.playerX) ** 2 + (c.y - state.playerY) ** 2)))
+      : 999;
+    const healthDanger = 1 - state.health / 100;
+    const proximityDanger = Math.max(0, 1 - nearestCreatureDist / 200);
+    updateHeartbeat(Math.max(healthDanger, proximityDanger));
+
+    // Fire crackle
+    const nearestFire = state.fires.reduce((best, f) => {
+      const d = Math.sqrt((f.x - state.playerX) ** 2 + (f.y - state.playerY) ** 2);
+      return (!best || d < best.d) ? { fuel: f.fuel, d } : best;
+    }, null as { fuel: number; d: number } | null);
+    updateFireCrackle(nearestFire ? nearestFire.fuel / 100 : 0, nearestFire?.d ?? 999);
+
+    // Creature sounds
+    if (state.tick % 12 === 0 && nearestCreatureDist < 300) {
+      const closest = state.creatures.reduce((best, c) => {
+        const d = Math.sqrt((c.x - state.playerX) ** 2 + (c.y - state.playerY) ** 2);
+        return (!best || d < best.d) ? { c, d } : best;
+      }, null as { c: typeof state.creatures[0]; d: number } | null);
+      if (closest && closest.d < 300) {
+        const angle = Math.atan2(closest.c.y - state.playerY, closest.c.x - state.playerX);
+        playCreatureSound(closest.c.type, angle - state.playerAngle, closest.d);
+      }
+    }
+
+    // Damage taken sound
+    if (state.health < prevHealthRef.current) {
+      playDamageTaken();
+    }
+    prevHealthRef.current = state.health;
+  }, [state?.tick]);
 
   // Mode select → faction select (solo) or multiplayer
   const handleSelectSolo = useCallback(() => {
@@ -99,6 +163,13 @@ export default function ExplorationScreen() {
 
       if (dx !== 0 || dy !== 0) {
         setState(prev => prev ? movePlayer(prev, dx, dy, keys.has("shift"), w) : prev);
+        // Footstep sounds
+        footstepCooldownRef.current -= 1;
+        if (footstepCooldownRef.current <= 0) {
+          const vol = keys.has("shift") ? 0.5 : 0.25;
+          playFootstep(vol);
+          footstepCooldownRef.current = keys.has("shift") ? 6 : 10;
+        }
       }
       frameId = requestAnimationFrame(frame);
     };
@@ -118,14 +189,22 @@ export default function ExplorationScreen() {
   const handleJoystick = useCallback((dx: number, dy: number) => { joystickRef.current = { dx, dy }; }, []);
 
   const handleToggleFlashlight = useCallback(() => {
+    playFlashlightClick();
     setState(prev => prev ? toggleFlashlight(prev) : prev);
   }, []);
 
   const handleAttack = useCallback(() => {
-    setState(prev => prev ? attackCreature(prev) : prev);
+    setState(prev => {
+      if (!prev) return prev;
+      const before = prev.creatures.length;
+      const after = attackCreature(prev);
+      playWeaponHit(after.creatures.length < before);
+      return after;
+    });
   }, []);
 
   const handleStartFire = useCallback(() => {
+    playLighterFlick();
     setState(prev => prev ? startFire(prev) : prev);
   }, []);
 
@@ -170,6 +249,7 @@ export default function ExplorationScreen() {
             s.forageCooldownUntil = s.tick + FORAGE_COOLDOWN_TICKS;
             s.noise = Math.min(NOISE_MAX, s.noise + NOISE_FORAGE);
             s.resourceNodes[i] = { ...node, depletedUntilTick: s.tick + RESOURCE_RESPAWN_TICKS };
+            playForage();
             if (node.type === "wood") { s.wood += 2; addLog(s, "You gather wood.", "info"); }
             else if (node.type === "food") { s.food += 1; addLog(s, "You find food.", "info"); }
             else { s.materials += 2; addLog(s, "You find materials.", "discovery"); }

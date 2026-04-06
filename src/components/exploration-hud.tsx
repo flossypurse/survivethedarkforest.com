@@ -75,15 +75,24 @@ export default function ExplorationHUD({
   const batPct = state.flashlightBattery / FLASHLIGHT_BATTERY_MAX;
   const canSeeAnything = hasLight(state);
 
-  // Context-sensitive interact prompts
-  const prompts: string[] = [];
+  // Context-sensitive interact — single primary action + optional secondary
+  let primaryPrompt: string | null = null;
+  const secondaryPrompts: string[] = [];
   if (isPlaying) {
-    if (nearFire && nearFire.fuel > 0 && state.wood > 0) prompts.push("[E] Stoke Fire");
-    if (nearResource && canSeeAnything) prompts.push(`[E] Forage ${nearResource.type}`);
-    if (!nearFire && state.lighterUses > 0 && state.wood >= 2) prompts.push("[E] Start Fire");
-    if (nearFire && state.food > 0 && state.hunger > 20) prompts.push("[E] Eat");
-    if (state.weapon === "knife" && state.materials >= SPEAR_MATERIAL_COST) prompts.push("[E] Craft Spear");
-    if (state.weapon === "spear" && state.materials >= AXE_MATERIAL_COST) prompts.push("[E] Craft Axe");
+    // Primary: most urgent contextual action (what E does)
+    if (nearFire && nearFire.fuel > 0 && state.wood > 0) primaryPrompt = "[E] Stoke Fire";
+    else if (nearResource && canSeeAnything) primaryPrompt = `[E] Forage ${nearResource.type}`;
+    else if (!nearFire && state.lighterUses > 0 && state.wood >= 2) primaryPrompt = "[E] Start Fire";
+    else if (nearFire && state.food > 0 && state.hunger > 20) primaryPrompt = "[E] Eat";
+
+    // Secondary: crafting (always available if you have materials)
+    if (state.weapon === "knife" && state.materials >= SPEAR_MATERIAL_COST) secondaryPrompts.push("Craft Spear");
+    if (state.weapon === "spear" && state.materials >= AXE_MATERIAL_COST) secondaryPrompts.push("Craft Axe");
+
+    // Eat as secondary if primary is something else
+    if (primaryPrompt && !primaryPrompt.includes("Eat") && nearFire && state.food > 0 && state.hunger > 20) {
+      secondaryPrompts.push("Eat");
+    }
   }
 
   return (
@@ -190,14 +199,11 @@ export default function ExplorationHUD({
             [Q] Attack
           </button>
 
-          {/* Context prompts */}
-          {prompts.map((prompt, i) => (
+          {/* Primary interact */}
+          {primaryPrompt && (
             <button
-              key={i}
               onClick={() => {
-                if (prompt.includes("Craft Spear")) onCraftWeapon("spear");
-                else if (prompt.includes("Craft Axe")) onCraftWeapon("axe");
-                else if (prompt.includes("Start Fire")) onStartFire();
+                if (primaryPrompt!.includes("Start Fire")) onStartFire();
                 else onInteract();
               }}
               className="cursor-pointer"
@@ -209,7 +215,29 @@ export default function ExplorationHUD({
                 fontSize: "0.75rem", fontWeight: 600,
               }}
             >
-              {prompt}
+              {primaryPrompt}
+            </button>
+          )}
+
+          {/* Secondary actions (crafting, eat) */}
+          {secondaryPrompts.map((label, i) => (
+            <button
+              key={i}
+              onClick={() => {
+                if (label === "Craft Spear") onCraftWeapon("spear");
+                else if (label === "Craft Axe") onCraftWeapon("axe");
+                else if (label === "Eat") onInteract(); // eat handled in interact
+              }}
+              className="cursor-pointer"
+              style={{
+                padding: "8px 12px", borderRadius: "6px",
+                background: "rgba(20,20,15,0.5)",
+                color: C.muted,
+                border: `1px solid rgba(100,100,90,0.15)`,
+                fontSize: "0.65rem", fontWeight: 600,
+              }}
+            >
+              {label}
             </button>
           ))}
         </div>
